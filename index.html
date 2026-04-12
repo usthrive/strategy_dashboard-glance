@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPX Stage 12 — Glance</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
   <style>
     :root {
       --bg: #0e1117; --card: #1a1e2e; --text: #e6e6e6; --muted: #8899aa;
@@ -34,6 +35,20 @@
     .loading { text-align: center; color: var(--muted); padding: 40px; }
     .dd-warn { color: var(--amber); }
     .dd-danger { color: var(--red); }
+    .chart-card { padding: 12px; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .chart-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .toggle-group { display: flex; gap: 4px; }
+    .toggle-btn {
+      background: transparent; border: 1px solid #333; color: var(--muted);
+      padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .toggle-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .toggle-btn:hover:not(.active) { border-color: var(--muted); }
+    #chart-container { width: 100%; min-height: 180px; }
+    .u-wrap { background: transparent !important; }
+    .chart-legend { text-align: center; font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
     @media (min-width: 600px) { .container { max-width: 520px; } .action-label { font-size: 3rem; } }
   </style>
 </head>
@@ -58,8 +73,8 @@
         <div class="metric-label">VIX</div>
       </div>
       <div class="metric">
-        <div id="equity" class="metric-value">—</div>
-        <div class="metric-label">Equity (nominal)</div>
+        <div id="ytd" class="metric-value">—</div>
+        <div class="metric-label">YTD Return</div>
       </div>
       <div class="metric">
         <div id="dd" class="metric-value">—</div>
@@ -90,19 +105,30 @@
       <div id="commentary" class="commentary">Loading…</div>
     </div>
 
+    <div class="card chart-card" id="chart-card" style="display:none;">
+      <div class="chart-header">
+        <span class="chart-title">Equity Performance</span>
+        <div class="toggle-group">
+          <button class="toggle-btn active" data-years="1">1Y</button>
+          <button class="toggle-btn" data-years="3">3Y</button>
+          <button class="toggle-btn" data-years="5">5Y</button>
+        </div>
+      </div>
+      <div id="chart-container"></div>
+      <div class="chart-legend">
+        <span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;
+        <span style="color:#8899aa;">&#9644;</span> S&amp;P 500
+      </div>
+    </div>
+
     <div class="footer" id="footer"></div>
   </div>
 
 <script>
-const STATE_URL = 'https://raw.githubusercontent.com/usthrive/strategy_dashboard-state/main/state.json';
+const STATE_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/public_glance.json';
 
 function fmt(n, d=1) { return n == null ? '—' : Number(n).toFixed(d); }
 function fmtPct(n, d=1) { return n == null ? '—' : Number(n).toFixed(d) + '%'; }
-function fmtUsd(n) {
-  if (n == null) return '—';
-  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-
 function isStale(asOf) {
   // Check if as_of_date is older than 2 calendar days (handles weekends gracefully)
   const d = new Date(asOf + 'T16:00:00-04:00'); // NYSE close in ET
@@ -149,7 +175,15 @@ async function load() {
 
     document.getElementById('gspc').textContent = fmt(ms.gspc_close, 1);
     document.getElementById('vix').textContent = fmt(ms.vix_close, 1);
-    document.getElementById('equity').textContent = fmtUsd(ps.current_equity_usd);
+
+    // YTD return with color coding
+    const ytdPct = ps.ytd_return_pct;
+    const ytdEl = document.getElementById('ytd');
+    ytdEl.textContent = fmtPct(ytdPct);
+    if (ytdPct != null) {
+      if (ytdPct >= 0) ytdEl.style.color = 'var(--green)';
+      else ytdEl.style.color = 'var(--red)';
+    }
 
     // Intra-trade DD with color coding
     const ddPct = eq_stop.intra_dd_pct;
@@ -164,7 +198,7 @@ async function load() {
     const h = (s.headline && s.headline.gspc) || {};
     document.getElementById('cagr').textContent = fmtPct(h.cagr);
     document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
-    document.getElementById('maxdd').textContent = fmtPct(h.max_dd);
+    document.getElementById('maxdd').textContent = fmtPct(h.maxdd);
 
     // Bars in trade
     const ls = s.leverage_state || {};
@@ -189,6 +223,108 @@ async function load() {
 load();
 // Auto-refresh every 5 minutes
 setInterval(load, 5 * 60 * 1000);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script>
+// ── Equity Performance Chart ─────────────────────────────────────
+const EQUITY_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/public_equity_curve.json';
+
+let eqData = null;
+let uplotInst = null;
+
+function normalizeFromStart(arr) {
+  const base = arr[0];
+  if (!base || base === 0) return arr.map(() => 0);
+  return arr.map(v => (v / base - 1) * 100);
+}
+
+function sliceToYears(data, years) {
+  const last = data.ts[data.ts.length - 1];
+  const cutoff = last - years * 365.25 * 86400;
+  let start = 0;
+  for (let i = 0; i < data.ts.length; i++) {
+    if (data.ts[i] >= cutoff) { start = i; break; }
+  }
+  return {
+    ts: data.ts.slice(start),
+    eq: data.eq.slice(start),
+    bm: data.bm.slice(start),
+  };
+}
+
+function renderChart(years) {
+  if (!eqData) return;
+  const s = sliceToYears(eqData, years);
+  const stratPct = normalizeFromStart(s.eq);
+  const benchPct = normalizeFromStart(s.bm);
+
+  const container = document.getElementById('chart-container');
+  if (uplotInst) { uplotInst.destroy(); uplotInst = null; }
+  container.innerHTML = '';
+
+  const w = container.clientWidth || 340;
+  const opts = {
+    width: w, height: 180,
+    cursor: { show: true, x: true, y: false },
+    legend: { show: false },
+    scales: { x: { time: true }, y: { auto: true } },
+    axes: [
+      {
+        stroke: '#556',
+        grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 },
+        ticks: { stroke: 'rgba(255,255,255,0.1)', width: 1 },
+        font: '10px system-ui', gap: 4,
+      },
+      {
+        stroke: '#556',
+        grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 },
+        ticks: { stroke: 'rgba(255,255,255,0.1)', width: 1 },
+        font: '10px system-ui', gap: 4,
+        values: (u, vals) => vals.map(v => v.toFixed(0) + '%'),
+        size: 42,
+      },
+    ],
+    series: [
+      {},
+      { label: 'Strategy', stroke: '#22c55e', width: 2, fill: 'rgba(34,197,94,0.08)' },
+      { label: 'S&P 500', stroke: '#8899aa', width: 1, dash: [4, 3] },
+    ],
+  };
+
+  uplotInst = new uPlot(opts, [s.ts, stratPct, benchPct], container);
+}
+
+const resizeObs = new ResizeObserver(entries => {
+  if (uplotInst && entries[0]) {
+    const w = entries[0].contentRect.width;
+    if (w > 0) uplotInst.setSize({ width: w, height: 180 });
+  }
+});
+
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderChart(parseInt(btn.dataset.years));
+  });
+});
+
+async function loadEquityCurve() {
+  try {
+    const resp = await fetch(EQUITY_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    eqData = await resp.json();
+    if (!eqData.ts || eqData.ts.length < 2) throw new Error('No data');
+    document.getElementById('chart-card').style.display = '';
+    renderChart(1);
+    resizeObs.observe(document.getElementById('chart-container'));
+  } catch (err) {
+    console.warn('Equity curve load failed:', err.message);
+  }
+}
+
+loadEquityCurve();
 </script>
 </body>
 </html>
