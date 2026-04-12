@@ -25,6 +25,7 @@
     .leverage { font-size: 1.4rem; color: var(--muted); margin-top: 4px; }
     .trigger { font-size: 0.85rem; color: var(--muted); margin-top: 8px; font-style: italic; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
     .metric { text-align: center; }
     .metric-value { font-size: 1.3rem; font-weight: 600; }
     .metric-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
@@ -63,18 +64,26 @@
       <div id="trigger" class="trigger"></div>
     </div>
 
-    <div class="card grid">
+    <div class="card grid grid-3">
       <div class="metric">
         <div id="gspc" class="metric-value">—</div>
         <div class="metric-label">S&amp;P 500</div>
       </div>
       <div class="metric">
-        <div id="vix" class="metric-value">—</div>
-        <div class="metric-label">VIX</div>
+        <div id="trade-pnl" class="metric-value">—</div>
+        <div class="metric-label">Trade P&amp;L</div>
       </div>
       <div class="metric">
         <div id="ytd" class="metric-value">—</div>
         <div class="metric-label">YTD Return</div>
+      </div>
+      <div class="metric">
+        <div id="strat-1d" class="metric-value">—</div>
+        <div class="metric-label">Strategy 1D</div>
+      </div>
+      <div class="metric">
+        <div id="spy-1d" class="metric-value">—</div>
+        <div class="metric-label">S&amp;P 500 1D</div>
       </div>
       <div class="metric">
         <div id="dd" class="metric-value">—</div>
@@ -174,16 +183,30 @@ async function load() {
     const eq_stop = cs.equity_stop || {};
 
     document.getElementById('gspc').textContent = fmt(ms.gspc_close, 1);
-    document.getElementById('vix').textContent = fmt(ms.vix_close, 1);
+
+    // Trade P&L (unrealized return of current trade)
+    const tradePnl = ps.unrealized_return_pct;
+    const tradePnlEl = document.getElementById('trade-pnl');
+    tradePnlEl.textContent = fmtPct(tradePnl);
+    if (tradePnl != null) tradePnlEl.style.color = tradePnl >= 0 ? 'var(--green)' : 'var(--red)';
 
     // YTD return with color coding
     const ytdPct = ps.ytd_return_pct;
     const ytdEl = document.getElementById('ytd');
     ytdEl.textContent = fmtPct(ytdPct);
-    if (ytdPct != null) {
-      if (ytdPct >= 0) ytdEl.style.color = 'var(--green)';
-      else ytdEl.style.color = 'var(--red)';
-    }
+    if (ytdPct != null) ytdEl.style.color = ytdPct >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Yesterday's strategy return
+    const stratDay = ps.yesterday_strategy_return_pct;
+    const stratDayEl = document.getElementById('strat-1d');
+    stratDayEl.textContent = fmtPct(stratDay);
+    if (stratDay != null) stratDayEl.style.color = stratDay >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Yesterday's S&P 500 return
+    const spyDay = ps.yesterday_spy_return_pct;
+    const spyDayEl = document.getElementById('spy-1d');
+    spyDayEl.textContent = fmtPct(spyDay);
+    if (spyDay != null) spyDayEl.style.color = spyDay >= 0 ? 'var(--green)' : 'var(--red)';
 
     // Intra-trade DD with color coding
     const ddPct = eq_stop.intra_dd_pct;
