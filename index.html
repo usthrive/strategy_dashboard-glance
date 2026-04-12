@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPX Stage 12 — Glance</title>
+  <style>
+    :root {
+      --bg: #0e1117; --card: #1a1e2e; --text: #e6e6e6; --muted: #8899aa;
+      --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+           background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+    .container { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 1.1rem; color: var(--muted); margin-bottom: 12px; text-align: center; }
+    .card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 12px; }
+    .action-card { text-align: center; }
+    .action-label { font-size: 2.4rem; font-weight: 700; letter-spacing: 2px; }
+    .action-HOLD { color: var(--blue); }
+    .action-BUY { color: var(--green); }
+    .action-SELL { color: var(--red); }
+    .action-ADJUST { color: var(--amber); }
+    .leverage { font-size: 1.4rem; color: var(--muted); margin-top: 4px; }
+    .trigger { font-size: 0.85rem; color: var(--muted); margin-top: 8px; font-style: italic; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .metric { text-align: center; }
+    .metric-value { font-size: 1.3rem; font-weight: 600; }
+    .metric-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .stale-banner { background: var(--red); color: #fff; text-align: center;
+                    padding: 8px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; }
+    .commentary { font-size: 0.85rem; line-height: 1.5; color: var(--muted); }
+    .footer { text-align: center; font-size: 0.7rem; color: #556; margin-top: 16px; }
+    .loading { text-align: center; color: var(--muted); padding: 40px; }
+    .dd-warn { color: var(--amber); }
+    .dd-danger { color: var(--red); }
+    @media (min-width: 600px) { .container { max-width: 520px; } .action-label { font-size: 3rem; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="stale-banner" class="stale-banner" style="display:none;"></div>
+    <h1 id="header">SPX Stage 12 — loading…</h1>
+
+    <div class="card action-card">
+      <div id="action" class="action-label">—</div>
+      <div id="leverage" class="leverage"></div>
+      <div id="trigger" class="trigger"></div>
+    </div>
+
+    <div class="card grid">
+      <div class="metric">
+        <div id="gspc" class="metric-value">—</div>
+        <div class="metric-label">S&amp;P 500</div>
+      </div>
+      <div class="metric">
+        <div id="vix" class="metric-value">—</div>
+        <div class="metric-label">VIX</div>
+      </div>
+      <div class="metric">
+        <div id="equity" class="metric-value">—</div>
+        <div class="metric-label">Equity (nominal)</div>
+      </div>
+      <div class="metric">
+        <div id="dd" class="metric-value">—</div>
+        <div class="metric-label">Intra-trade DD</div>
+      </div>
+    </div>
+
+    <div class="card grid">
+      <div class="metric">
+        <div id="cagr" class="metric-value">—</div>
+        <div class="metric-label">CAGR (^GSPC)</div>
+      </div>
+      <div class="metric">
+        <div id="sharpe" class="metric-value">—</div>
+        <div class="metric-label">Sharpe</div>
+      </div>
+      <div class="metric">
+        <div id="maxdd" class="metric-value">—</div>
+        <div class="metric-label">Max DD</div>
+      </div>
+      <div class="metric">
+        <div id="bars-in-trade" class="metric-value">—</div>
+        <div class="metric-label">Bars in trade</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="commentary" class="commentary">Loading…</div>
+    </div>
+
+    <div class="footer" id="footer"></div>
+  </div>
+
+<script>
+const STATE_URL = 'https://raw.githubusercontent.com/usthrive/strategy_dashboard-state/main/state.json';
+
+function fmt(n, d=1) { return n == null ? '—' : Number(n).toFixed(d); }
+function fmtPct(n, d=1) { return n == null ? '—' : Number(n).toFixed(d) + '%'; }
+function fmtUsd(n) {
+  if (n == null) return '—';
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function isStale(asOf) {
+  // Check if as_of_date is older than 2 calendar days (handles weekends gracefully)
+  const d = new Date(asOf + 'T16:00:00-04:00'); // NYSE close in ET
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  // 3+ calendar days = likely stale (covers weekends: Fri→Mon = 3 days)
+  return diffDays > 3.5;
+}
+
+async function load() {
+  try {
+    const resp = await fetch(STATE_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const s = await resp.json();
+
+    const asOf = s.as_of_date || 'unknown';
+    const action = (s.action && s.action.action) || 'UNKNOWN';
+    const lev = s.leverage != null ? s.leverage : '?';
+    const trigger = (s.action && s.action.trigger) || '';
+
+    // Header
+    document.getElementById('header').textContent = `SPX Stage 12 — ${asOf}`;
+
+    // Stale banner
+    if (isStale(asOf)) {
+      const banner = document.getElementById('stale-banner');
+      banner.textContent = `⚠ STALE — last update: ${asOf}`;
+      banner.style.display = 'block';
+    }
+
+    // Action card
+    const actionEl = document.getElementById('action');
+    actionEl.textContent = action;
+    actionEl.className = `action-label action-${action}`;
+    document.getElementById('leverage').textContent = `${lev}× leverage`;
+    document.getElementById('trigger').textContent = trigger;
+
+    // Market metrics
+    const ms = s.market_state || {};
+    const ps = s.pnl_state || {};
+    const cs = s.catastrophe_stops || {};
+    const eq_stop = cs.equity_stop || {};
+
+    document.getElementById('gspc').textContent = fmt(ms.gspc_close, 1);
+    document.getElementById('vix').textContent = fmt(ms.vix_close, 1);
+    document.getElementById('equity').textContent = fmtUsd(ps.current_equity_usd);
+
+    // Intra-trade DD with color coding
+    const ddPct = eq_stop.intra_dd_pct;
+    const ddEl = document.getElementById('dd');
+    ddEl.textContent = fmtPct(ddPct);
+    if (ddPct != null) {
+      if (ddPct > 10) ddEl.className = 'metric-value dd-danger';
+      else if (ddPct > 5) ddEl.className = 'metric-value dd-warn';
+    }
+
+    // Headline stats
+    const h = (s.headline && s.headline.gspc) || {};
+    document.getElementById('cagr').textContent = fmtPct(h.cagr);
+    document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
+    document.getElementById('maxdd').textContent = fmtPct(h.max_dd);
+
+    // Bars in trade
+    const ls = s.leverage_state || {};
+    const hybrid = ls.tla_tle_hybrid || {};
+    document.getElementById('bars-in-trade').textContent =
+      hybrid.bars_since_entry != null ? hybrid.bars_since_entry : '—';
+
+    // Commentary
+    const comm = s.commentary || 'No commentary available.';
+    document.getElementById('commentary').textContent = comm;
+
+    // Footer
+    const gen = s.generated_at_utc || '';
+    document.getElementById('footer').textContent = `Generated: ${gen}`;
+
+  } catch (err) {
+    document.getElementById('header').textContent = 'SPX Stage 12 — Error';
+    document.getElementById('commentary').textContent = `Failed to load state: ${err.message}`;
+  }
+}
+
+load();
+// Auto-refresh every 5 minutes
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>

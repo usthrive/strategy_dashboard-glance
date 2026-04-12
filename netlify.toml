@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+  # No build command needed — static HTML
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
