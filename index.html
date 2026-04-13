@@ -197,7 +197,11 @@ async function load() {
 
     // Action card
     const actionEl = document.getElementById('action');
-    actionEl.textContent = action;
+    let displayAction = action;
+    if (action === 'HOLD') {
+      displayAction = lev > 0 ? 'LONG HOLD' : 'CASH HOLD';
+    }
+    actionEl.textContent = displayAction;
     actionEl.className = `action-label action-${action}`;
     document.getElementById('leverage').textContent = `${lev}× leverage`;
     document.getElementById('trigger').textContent = trigger;
