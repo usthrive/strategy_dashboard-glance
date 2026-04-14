@@ -260,7 +260,7 @@ async function load() {
       hybrid.bars_since_entry != null ? hybrid.bars_since_entry : '—';
 
     // Commentary
-    const comm = s.commentary || 'No commentary available.';
+    const comm = s.simple_commentary || s.commentary || 'No commentary available.';
     document.getElementById('commentary').textContent = comm;
 
     // Footer
