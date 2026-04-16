@@ -142,15 +142,18 @@
 
     <div class="card chart-card" id="chart-card" style="display:none;">
       <div class="chart-header">
-        <span class="chart-title">Equity Performance</span>
-        <div class="toggle-group">
-          <button class="toggle-btn active" data-years="1">1Y</button>
-          <button class="toggle-btn" data-years="3">3Y</button>
-          <button class="toggle-btn" data-years="5">5Y</button>
+        <div class="toggle-group" id="view-toggle">
+          <button class="toggle-btn view-btn active" data-view="backtest">Backtest</button>
+          <button class="toggle-btn view-btn" data-view="live" id="live-btn" style="display:none">Live</button>
+        </div>
+        <div class="toggle-group" id="years-toggle">
+          <button class="toggle-btn yr-btn active" data-years="1">1Y</button>
+          <button class="toggle-btn yr-btn" data-years="3">3Y</button>
+          <button class="toggle-btn yr-btn" data-years="5">5Y</button>
         </div>
       </div>
       <div id="chart-container"></div>
-      <div class="chart-legend">
+      <div class="chart-legend" id="chart-legend">
         <span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;
         <span style="color:#8899aa;">&#9644;</span> S&amp;P 500
       </div>
@@ -327,6 +330,8 @@ const EQUITY_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/p
 
 let eqData = null;
 let uplotInst = null;
+let chartView = 'backtest';  // 'backtest' or 'live'
+let chartYears = 1;
 
 function normalizeFromStart(arr) {
   const base = arr[0];
@@ -334,32 +339,61 @@ function normalizeFromStart(arr) {
   return arr.map(v => (v / base - 1) * 100);
 }
 
-function sliceToYears(data, years) {
-  const last = data.ts[data.ts.length - 1];
+function sliceToYears(ts, years) {
+  const last = ts[ts.length - 1];
   const cutoff = last - years * 365.25 * 86400;
   let start = 0;
-  for (let i = 0; i < data.ts.length; i++) {
-    if (data.ts[i] >= cutoff) { start = i; break; }
+  for (let i = 0; i < ts.length; i++) {
+    if (ts[i] >= cutoff) { start = i; break; }
   }
-  return {
-    ts: data.ts.slice(start),
-    eq: data.eq.slice(start),
-    bm: data.bm.slice(start),
-  };
+  return start;
 }
 
-function renderChart(years) {
-  if (!eqData) return;
-  const s = sliceToYears(eqData, years);
-  const stratPct = normalizeFromStart(s.eq);
-  const benchPct = normalizeFromStart(s.bm);
+function updateLegend() {
+  const el = document.getElementById('chart-legend');
+  if (chartView === 'live') {
+    const acctType = (eqData.actual_account_type || 'paper').toUpperCase();
+    el.innerHTML = '<span style="color:#f59e0b;">&#9644;</span> Actual (' + acctType + ') &nbsp;' +
+                   '<span style="color:#8899aa;">&#9644;</span> S&amp;P 500';
+  } else {
+    el.innerHTML = '<span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;' +
+                   '<span style="color:#8899aa;">&#9644;</span> S&amp;P 500';
+  }
+}
 
-  const container = document.getElementById('chart-container');
+function renderChart() {
+  if (!eqData) return;
+
+  var ts, line1, bm, seriesColor, seriesLabel, seriesFill;
+
+  if (chartView === 'live' && eqData.actual_ts && eqData.actual_ts.length >= 2) {
+    // Live view: actual equity + its matching S&P 500
+    ts = eqData.actual_ts;
+    line1 = eqData.actual_eq;
+    bm = eqData.actual_bm || eqData.actual_eq; // fallback
+    seriesColor = '#f59e0b';
+    seriesLabel = 'Actual';
+    seriesFill = 'rgba(245,158,11,0.08)';
+  } else {
+    // Backtest view (default): strategy + S&P 500
+    var start = sliceToYears(eqData.ts, chartYears);
+    ts = eqData.ts.slice(start);
+    line1 = eqData.eq.slice(start);
+    bm = eqData.bm.slice(start);
+    seriesColor = '#22c55e';
+    seriesLabel = 'Strategy';
+    seriesFill = 'rgba(34,197,94,0.08)';
+  }
+
+  var line1Pct = normalizeFromStart(line1);
+  var bmPct = normalizeFromStart(bm);
+
+  var container = document.getElementById('chart-container');
   if (uplotInst) { uplotInst.destroy(); uplotInst = null; }
   container.innerHTML = '';
 
-  const w = container.clientWidth || 340;
-  const opts = {
+  var w = container.clientWidth || 340;
+  var opts = {
     width: w, height: 180,
     cursor: { show: true, x: true, y: false },
     legend: { show: false },
@@ -376,43 +410,66 @@ function renderChart(years) {
         grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 },
         ticks: { stroke: 'rgba(255,255,255,0.1)', width: 1 },
         font: '10px system-ui', gap: 4,
-        values: (u, vals) => vals.map(v => v.toFixed(0) + '%'),
+        values: function(u, vals) { return vals.map(function(v) { return v.toFixed(0) + '%'; }); },
         size: 42,
       },
     ],
     series: [
       {},
-      { label: 'Strategy', stroke: '#22c55e', width: 2, fill: 'rgba(34,197,94,0.08)' },
+      { label: seriesLabel, stroke: seriesColor, width: 2, fill: seriesFill },
       { label: 'S&P 500', stroke: '#8899aa', width: 1, dash: [4, 3] },
     ],
   };
 
-  uplotInst = new uPlot(opts, [s.ts, stratPct, benchPct], container);
+  uplotInst = new uPlot(opts, [ts, line1Pct, bmPct], container);
+  updateLegend();
 }
 
-const resizeObs = new ResizeObserver(entries => {
+const resizeObs = new ResizeObserver(function(entries) {
   if (uplotInst && entries[0]) {
-    const w = entries[0].contentRect.width;
+    var w = entries[0].contentRect.width;
     if (w > 0) uplotInst.setSize({ width: w, height: 180 });
   }
 });
 
-document.querySelectorAll('.toggle-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+// Year toggle buttons
+document.querySelectorAll('.yr-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.yr-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
-    renderChart(parseInt(btn.dataset.years));
+    chartYears = parseInt(btn.dataset.years);
+    renderChart();
+  });
+});
+
+// View toggle buttons (Backtest / Live)
+document.querySelectorAll('.view-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    chartView = btn.dataset.view;
+    // In live view, year toggles don't apply (show all available data)
+    var yearsToggle = document.getElementById('years-toggle');
+    yearsToggle.style.opacity = chartView === 'live' ? '0.3' : '1';
+    yearsToggle.style.pointerEvents = chartView === 'live' ? 'none' : 'auto';
+    renderChart();
   });
 });
 
 async function loadEquityCurve() {
   try {
-    const resp = await fetch(EQUITY_URL, { cache: 'no-store' });
+    var resp = await fetch(EQUITY_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     eqData = await resp.json();
     if (!eqData.ts || eqData.ts.length < 2) throw new Error('No data');
     document.getElementById('chart-card').style.display = '';
-    renderChart(1);
+
+    // Show Live button if actual data available (>= 2 weekly points)
+    if (eqData.actual_ts && eqData.actual_ts.length >= 2) {
+      document.getElementById('live-btn').style.display = '';
+    }
+
+    renderChart();
     resizeObs.observe(document.getElementById('chart-container'));
   } catch (err) {
     console.warn('Equity curve load failed:', err.message);
