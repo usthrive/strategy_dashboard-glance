@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SPX Stage 12 — Glance</title>
+  <title>SP500 12-Stage Strategy — Glance</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
   <style>
     :root {
@@ -73,7 +73,7 @@
 <body>
   <div class="container">
     <div id="stale-banner" class="stale-banner" style="display:none;"></div>
-    <h1 id="header">SPX Stage 12 — loading…</h1>
+    <h1 id="header">SP500 12-Stage Strategy — loading…</h1>
 
     <div class="card action-card">
       <div id="action" class="action-label">—</div>
@@ -189,7 +189,7 @@ async function load() {
     const trigger = (s.action && s.action.trigger) || '';
 
     // Header
-    document.getElementById('header').textContent = `SPX Stage 12 — ${asOf}`;
+    document.getElementById('header').textContent = `SP500 12-Stage Strategy — ${asOf}`;
 
     // Stale banner
     if (isStale(asOf)) {
@@ -386,7 +386,7 @@ async function load() {
     }
 
   } catch (err) {
-    document.getElementById('header').textContent = 'SPX Stage 12 — Error';
+    document.getElementById('header').textContent = 'SP500 12-Stage Strategy — Error';
     document.getElementById('commentary').textContent = `Failed to load state: ${err.message}`;
   }
 }
