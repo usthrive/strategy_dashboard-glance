@@ -57,6 +57,8 @@
     .account-col { text-align: center; }
     .account-name { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
     .account-id { font-size: 0.65rem; color: #556; font-family: monospace; margin-left: 4px; }
+    .account-return { font-size: 0.7rem; margin-top: 2px; }
+    .account-return-spy { color: var(--muted); margin-left: 4px; }
     .account-badge { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 6px;
       border-radius: 4px; margin-left: 4px; vertical-align: middle; }
     .badge-paper { background: var(--amber); color: #000; }
@@ -312,6 +314,24 @@ async function load() {
           ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
           : '\u2014';
         col.appendChild(eqDiv);
+
+        const inc = data.inception;
+        if (inc && inc.return_pct != null) {
+          const retDiv = document.createElement('div');
+          retDiv.className = 'account-return';
+          const sign = inc.return_pct >= 0 ? '+' : '';
+          const acctColor = inc.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+          let html = '<span style="color:' + acctColor + ';">'
+            + sign + inc.return_pct.toFixed(2) + '%</span>'
+            + '<span class="account-return-spy">since ' + escapeHtml(inc.inception_date) + '</span>';
+          if (inc.spy_return_pct != null) {
+            const spySign = inc.spy_return_pct >= 0 ? '+' : '';
+            html += '<span class="account-return-spy">(SPY: ' + spySign
+              + inc.spy_return_pct.toFixed(2) + '%)</span>';
+          }
+          retDiv.innerHTML = html;
+          col.appendChild(retDiv);
+        }
 
         const posDiv = document.createElement('div');
         posDiv.className = 'account-positions';
