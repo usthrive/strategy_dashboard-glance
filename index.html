@@ -50,9 +50,13 @@
     #chart-container { width: 100%; min-height: 180px; }
     .u-wrap { background: transparent !important; }
     .chart-legend { text-align: center; font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
-    .accounts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .accounts-section { margin-bottom: 16px; }
+    .accounts-section:last-child { margin-bottom: 0; }
+    .accounts-section-header { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; text-align: center; }
+    .accounts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
     .account-col { text-align: center; }
     .account-name { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .account-id { font-size: 0.65rem; color: #556; font-family: monospace; margin-left: 4px; }
     .account-badge { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 6px;
       border-radius: 4px; margin-left: 4px; vertical-align: middle; }
     .badge-paper { background: var(--amber); color: #000; }
@@ -125,18 +129,13 @@
     </div>
 
     <div class="card" id="accounts-card" style="display:none;">
-      <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;text-align:center;">Trading Accounts</div>
-      <div class="accounts-grid">
-        <div class="account-col" id="acct-alpaca">
-          <div class="account-name">Alpaca <span id="alpaca-badge" class="account-badge badge-paper">PAPER</span></div>
-          <div id="alpaca-equity" class="account-equity">&mdash;</div>
-          <div id="alpaca-positions" class="account-positions"></div>
-        </div>
-        <div class="account-col" id="acct-ibkr">
-          <div class="account-name">IBKR <span id="ibkr-badge" class="account-badge badge-paper">PAPER</span></div>
-          <div id="ibkr-equity" class="account-equity">&mdash;</div>
-          <div id="ibkr-positions" class="account-positions"></div>
-        </div>
+      <div class="accounts-section" id="live-accounts-section" style="display:none;">
+        <div class="accounts-section-header">Live Accounts</div>
+        <div class="accounts-grid" id="live-accounts-grid"></div>
+      </div>
+      <div class="accounts-section" id="paper-accounts-section" style="display:none;">
+        <div class="accounts-section-header">Paper Test Accounts</div>
+        <div class="accounts-grid" id="paper-accounts-grid"></div>
       </div>
     </div>
 
@@ -270,46 +269,88 @@ async function load() {
     const gen = s.generated_at_utc || '';
     document.getElementById('footer').textContent = `Generated: ${gen}`;
 
-    // Trading Accounts
+    // Trading Accounts — live and paper sections
     const ta = s.trading_accounts;
-    if (ta && ta.accounts) {
-      document.getElementById('accounts-card').style.display = '';
+    if (ta && (ta.live_accounts || ta.paper_accounts)) {
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function(c) {
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+      }
 
-      function renderAccount(prefix, data) {
-        const eqEl = document.getElementById(prefix + '-equity');
-        const posEl = document.getElementById(prefix + '-positions');
-        const badgeEl = document.getElementById(prefix + '-badge');
+      function buildAccountCol(name, data) {
+        if (!data) return null;
+        const col = document.createElement('div');
+        col.className = 'account-col';
 
-        if (!data || !data.connected) {
-          eqEl.textContent = '';
-          posEl.innerHTML = '<span class="account-disconnected">Not connected</span>';
-          badgeEl.style.display = 'none';
-          return;
+        const displayName = name.replace(/_/g, ' ').toUpperCase();
+        const acctType = data.account_type || 'paper';
+        const acctId = data.account_id_masked || '';
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'account-name';
+        let nameHtml = escapeHtml(displayName)
+          + ' <span class="account-badge badge-' + escapeHtml(acctType) + '">'
+          + escapeHtml(acctType.toUpperCase()) + '</span>';
+        if (acctId) {
+          nameHtml += ' <span class="account-id">' + escapeHtml(acctId) + '</span>';
+        }
+        nameDiv.innerHTML = nameHtml;
+        col.appendChild(nameDiv);
+
+        if (!data.connected) {
+          const posDiv = document.createElement('div');
+          posDiv.className = 'account-positions';
+          posDiv.innerHTML = '<span class="account-disconnected">Not connected</span>';
+          col.appendChild(posDiv);
+          return col;
         }
 
-        badgeEl.textContent = (data.account_type || 'paper').toUpperCase();
-        badgeEl.className = 'account-badge badge-' + (data.account_type || 'paper');
-        badgeEl.style.display = '';
-
-        eqEl.textContent = data.equity != null
+        const eqDiv = document.createElement('div');
+        eqDiv.className = 'account-equity';
+        eqDiv.textContent = data.equity != null
           ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
           : '\u2014';
+        col.appendChild(eqDiv);
 
+        const posDiv = document.createElement('div');
+        posDiv.className = 'account-positions';
         if (data.positions && data.positions.length > 0) {
-          posEl.innerHTML = data.positions.map(function(p) {
+          posDiv.innerHTML = data.positions.map(function(p) {
             var qty = p.qty != null ? Number(p.qty).toFixed(2) : '?';
             var val = p.market_value != null
               ? ' ($' + Number(p.market_value).toLocaleString(undefined, {maximumFractionDigits: 0}) + ')'
               : '';
-            return qty + ' ' + p.symbol + val;
+            return escapeHtml(qty + ' ' + p.symbol + val);
           }).join('<br>');
         } else {
-          posEl.textContent = 'No positions';
+          posDiv.textContent = 'No positions';
+        }
+        col.appendChild(posDiv);
+        return col;
+      }
+
+      function fillSection(sectionId, gridId, accounts) {
+        const grid = document.getElementById(gridId);
+        grid.innerHTML = '';
+        const names = Object.keys(accounts || {});
+        names.forEach(function(name) {
+          const col = buildAccountCol(name, accounts[name]);
+          if (col) grid.appendChild(col);
+        });
+        if (names.length > 0) {
+          document.getElementById(sectionId).style.display = '';
         }
       }
 
-      renderAccount('alpaca', ta.accounts.alpaca);
-      renderAccount('ibkr', ta.accounts.ibkr);
+      fillSection('live-accounts-section', 'live-accounts-grid', ta.live_accounts);
+      fillSection('paper-accounts-section', 'paper-accounts-grid', ta.paper_accounts);
+
+      const hasAny = (ta.live_accounts && Object.keys(ta.live_accounts).length > 0)
+        || (ta.paper_accounts && Object.keys(ta.paper_accounts).length > 0);
+      if (hasAny) {
+        document.getElementById('accounts-card').style.display = '';
+      }
     }
 
   } catch (err) {
