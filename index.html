@@ -50,21 +50,22 @@
     #chart-container { width: 100%; min-height: 180px; }
     .u-wrap { background: transparent !important; }
     .chart-legend { text-align: center; font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
-    .accounts-section { margin-bottom: 16px; }
-    .accounts-section:last-child { margin-bottom: 0; }
-    .accounts-section-header { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; text-align: center; }
-    .accounts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-    .account-col { text-align: center; }
-    .account-name { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-    .account-id { font-size: 0.65rem; color: #556; font-family: monospace; margin-left: 4px; }
-    .account-return { font-size: 0.7rem; margin-top: 2px; }
-    .account-return-spy { color: var(--muted); margin-left: 4px; }
-    .account-badge { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 6px;
-      border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+    .accounts-card-header { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; text-align: center; }
+    .account-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-top: 1px solid #1a2030; flex-wrap: wrap; }
+    .account-row:first-of-type { border-top: none; padding-top: 4px; }
+    .account-row-id-block { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 160px; flex-wrap: wrap; }
+    .account-strategy-badge { display: inline-block; font-size: 0.58rem; font-weight: 600; padding: 2px 6px; border-radius: 3px; background: #1f2733; color: #9aa6b8; letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap; }
+    .account-row-name { font-weight: 600; font-size: 0.85rem; }
+    .account-id { font-size: 0.65rem; color: #6b7a90; font-family: monospace; }
+    .account-row-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; min-width: 160px; text-align: right; }
+    .account-row-nlv { font-weight: 600; font-size: 0.95rem; }
+    .account-row-return { font-size: 0.7rem; }
+    .account-row-bench { color: var(--muted); margin-left: 4px; }
+    .account-row-positions { font-size: 0.7rem; color: var(--muted); flex: 1 1 100%; padding-left: 2px; margin-top: -2px; }
+    .account-badge { display: inline-block; font-size: 0.58rem; font-weight: 700; padding: 2px 6px;
+      border-radius: 3px; vertical-align: middle; }
     .badge-paper { background: var(--amber); color: #000; }
     .badge-live { background: var(--green); color: #000; }
-    .account-equity { font-size: 1.1rem; font-weight: 600; }
-    .account-positions { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
     .account-disconnected { font-size: 0.8rem; color: #556; font-style: italic; }
     @media (min-width: 600px) { .container { max-width: 520px; } .action-label { font-size: 3rem; } }
   </style>
@@ -130,15 +131,13 @@
       <div id="commentary" class="commentary">Loading…</div>
     </div>
 
-    <div class="card" id="accounts-card" style="display:none;">
-      <div class="accounts-section" id="live-accounts-section" style="display:none;">
-        <div class="accounts-section-header">Live Accounts</div>
-        <div class="accounts-grid" id="live-accounts-grid"></div>
-      </div>
-      <div class="accounts-section" id="paper-accounts-section" style="display:none;">
-        <div class="accounts-section-header">Paper Test Accounts</div>
-        <div class="accounts-grid" id="paper-accounts-grid"></div>
-      </div>
+    <div class="card" id="live-accounts-card" style="display:none;">
+      <div class="accounts-card-header">Live Accounts</div>
+      <div id="live-accounts-rows"></div>
+    </div>
+    <div class="card" id="paper-accounts-card" style="display:none;">
+      <div class="accounts-card-header">Paper Test Accounts</div>
+      <div id="paper-accounts-rows"></div>
     </div>
 
     <div class="card chart-card" id="chart-card" style="display:none;">
@@ -271,7 +270,7 @@ async function load() {
     const gen = s.generated_at_utc || '';
     document.getElementById('footer').textContent = `Generated: ${gen}`;
 
-    // Trading Accounts — live and paper sections
+    // Trading Accounts — Live and Paper Test cards, one row per account
     const ta = s.trading_accounts;
     if (ta && (ta.live_accounts || ta.paper_accounts)) {
       function escapeHtml(s) {
@@ -280,97 +279,110 @@ async function load() {
         });
       }
 
-      function buildAccountCol(name, data) {
+      function strategyLabel(group) {
+        if (!group) return null;
+        // Map known group keys to display labels; fall back to upper-cased key.
+        if (group === 'sp500_cycle') return 'SP500 Cycle';
+        return String(group).replace(/_/g, ' ').toUpperCase();
+      }
+
+      function buildAccountRow(name, data) {
         if (!data) return null;
-        const col = document.createElement('div');
-        col.className = 'account-col';
+        const row = document.createElement('div');
+        row.className = 'account-row';
 
         const displayName = name.replace(/_/g, ' ').toUpperCase();
         const acctType = data.account_type || 'paper';
         const acctId = data.account_id_masked || '';
+        const stratLabel = strategyLabel(data.strategy_group);
 
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'account-name';
-        let nameHtml = escapeHtml(displayName)
-          + ' <span class="account-badge badge-' + escapeHtml(acctType) + '">'
-          + escapeHtml(acctType.toUpperCase()) + '</span>';
-        if (acctId) {
-          nameHtml += ' <span class="account-id">' + escapeHtml(acctId) + '</span>';
+        // Left block: strategy tag + broker badge + name + masked id
+        const idBlock = document.createElement('div');
+        idBlock.className = 'account-row-id-block';
+        let idHtml = '';
+        if (stratLabel) {
+          idHtml += '<span class="account-strategy-badge">'
+            + escapeHtml(stratLabel) + '</span>';
         }
-        nameDiv.innerHTML = nameHtml;
-        col.appendChild(nameDiv);
+        idHtml += '<span class="account-badge badge-' + escapeHtml(acctType) + '">'
+          + escapeHtml(acctType.toUpperCase()) + '</span>'
+          + '<span class="account-row-name">' + escapeHtml(displayName) + '</span>';
+        if (acctId) {
+          idHtml += '<span class="account-id">' + escapeHtml(acctId) + '</span>';
+        }
+        idBlock.innerHTML = idHtml;
+        row.appendChild(idBlock);
 
         if (!data.connected) {
-          const posDiv = document.createElement('div');
-          posDiv.className = 'account-positions';
-          posDiv.innerHTML = '<span class="account-disconnected">Not connected</span>';
-          col.appendChild(posDiv);
-          return col;
+          const stats = document.createElement('div');
+          stats.className = 'account-row-stats';
+          stats.innerHTML = '<span class="account-disconnected">Not connected</span>';
+          row.appendChild(stats);
+          return row;
         }
 
-        const eqDiv = document.createElement('div');
-        eqDiv.className = 'account-equity';
-        eqDiv.textContent = data.equity != null
+        // Right block: NLV + return line
+        const stats = document.createElement('div');
+        stats.className = 'account-row-stats';
+        const nlvSpan = document.createElement('div');
+        nlvSpan.className = 'account-row-nlv';
+        nlvSpan.textContent = data.equity != null
           ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
           : '\u2014';
-        col.appendChild(eqDiv);
+        stats.appendChild(nlvSpan);
 
         const inc = data.inception;
         if (inc && inc.return_pct != null) {
           const retDiv = document.createElement('div');
-          retDiv.className = 'account-return';
+          retDiv.className = 'account-row-return';
           const sign = inc.return_pct >= 0 ? '+' : '';
           const acctColor = inc.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
-          let html = '<span style="color:' + acctColor + ';">'
+          let html = '<span style="color:' + acctColor + ';font-weight:600;">'
             + sign + inc.return_pct.toFixed(2) + '%</span>'
-            + '<span class="account-return-spy">since ' + escapeHtml(inc.inception_date) + '</span>';
-          if (inc.spy_return_pct != null) {
-            const spySign = inc.spy_return_pct >= 0 ? '+' : '';
-            html += '<span class="account-return-spy">(SPY: ' + spySign
-              + inc.spy_return_pct.toFixed(2) + '%)</span>';
+            + '<span class="account-row-bench">since ' + escapeHtml(inc.inception_date) + '</span>';
+          if (inc.bench_return_pct != null) {
+            const benchSign = inc.bench_return_pct >= 0 ? '+' : '';
+            const benchLabel = inc.bench_label || 'Benchmark';
+            html += '<span class="account-row-bench">(' + escapeHtml(benchLabel) + ': '
+              + benchSign + inc.bench_return_pct.toFixed(2) + '%)</span>';
           }
           retDiv.innerHTML = html;
-          col.appendChild(retDiv);
+          stats.appendChild(retDiv);
         }
+        row.appendChild(stats);
 
-        const posDiv = document.createElement('div');
-        posDiv.className = 'account-positions';
+        // Position summary spans full width below
         if (data.positions && data.positions.length > 0) {
+          const posDiv = document.createElement('div');
+          posDiv.className = 'account-row-positions';
           posDiv.innerHTML = data.positions.map(function(p) {
             var qty = p.qty != null ? Number(p.qty).toFixed(2) : '?';
             var val = p.market_value != null
               ? ' ($' + Number(p.market_value).toLocaleString(undefined, {maximumFractionDigits: 0}) + ')'
               : '';
             return escapeHtml(qty + ' ' + p.symbol + val);
-          }).join('<br>');
-        } else {
-          posDiv.textContent = 'No positions';
+          }).join(' · ');
+          row.appendChild(posDiv);
         }
-        col.appendChild(posDiv);
-        return col;
+
+        return row;
       }
 
-      function fillSection(sectionId, gridId, accounts) {
-        const grid = document.getElementById(gridId);
-        grid.innerHTML = '';
+      function fillCard(cardId, rowsId, accounts) {
+        const rowsContainer = document.getElementById(rowsId);
+        rowsContainer.innerHTML = '';
         const names = Object.keys(accounts || {});
         names.forEach(function(name) {
-          const col = buildAccountCol(name, accounts[name]);
-          if (col) grid.appendChild(col);
+          const row = buildAccountRow(name, accounts[name]);
+          if (row) rowsContainer.appendChild(row);
         });
         if (names.length > 0) {
-          document.getElementById(sectionId).style.display = '';
+          document.getElementById(cardId).style.display = '';
         }
       }
 
-      fillSection('live-accounts-section', 'live-accounts-grid', ta.live_accounts);
-      fillSection('paper-accounts-section', 'paper-accounts-grid', ta.paper_accounts);
-
-      const hasAny = (ta.live_accounts && Object.keys(ta.live_accounts).length > 0)
-        || (ta.paper_accounts && Object.keys(ta.paper_accounts).length > 0);
-      if (hasAny) {
-        document.getElementById('accounts-card').style.display = '';
-      }
+      fillCard('live-accounts-card', 'live-accounts-rows', ta.live_accounts);
+      fillCard('paper-accounts-card', 'paper-accounts-rows', ta.paper_accounts);
     }
 
   } catch (err) {
