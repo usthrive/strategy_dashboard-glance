@@ -3,208 +3,1089 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SP500 12-Stage Strategy — Glance</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+  <title>Penta Capital Strategies — SP500 12-Stage</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
   <style>
+    /* ─── Tokens ──────────────────────────────────────────────────── */
     :root {
-      --bg: #0e1117; --card: #1a1e2e; --text: #e6e6e6; --muted: #8899aa;
-      --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
+      --bg-0: #0E1114;
+      --bg-1: #141922;
+
+      --ink: #EEF2F6;
+      --mute: rgba(238,242,246,0.55);
+      --faint: rgba(238,242,246,0.25);
+
+      --glass-edge: rgba(255,255,255,0.08);
+      --glass-top:  rgba(255,255,255,0.035);
+      --glass-bot:  rgba(255,255,255,0.01);
+
+      --accent:       #8AA4FF;
+      --accent-deep:  #5B7DFF;
+      --gold:         #D6BD8A;
+
+      --pos: #7ED8A8;
+      --neg: #E89088;
+
+      --font-display: "Instrument Serif", Georgia, serif;
+      --font-sans:    "Instrument Sans", "Söhne", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+      --radius-card:  18px;
+      --radius-chip:  999px;
+      --radius-inner: 8px;
+
+      --shadow-card:
+        0 1px 0 rgba(255,255,255,0.04) inset,
+        0 12px 40px rgba(0,0,0,0.25);
+      --shadow-accent: 0 4px 12px rgba(91,125,255,0.30);
+      --shadow-glow:   0 0 10px var(--gold);
+
+      --ease: cubic-bezier(.2,.7,.3,1);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-           background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
-    .container { max-width: 480px; margin: 0 auto; }
-    h1 { font-size: 1.1rem; color: var(--muted); margin-bottom: 12px; text-align: center; }
-    .card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 12px; }
-    .action-card { text-align: center; }
-    .action-label { font-size: 2.4rem; font-weight: 700; letter-spacing: 2px; }
-    .action-HOLD { color: var(--blue); }
-    .action-BUY { color: var(--green); }
-    .action-SELL { color: var(--red); }
-    .action-ADJUST { color: var(--amber); }
-    .leverage { font-size: 1.4rem; color: var(--muted); margin-top: 4px; }
-    .trigger { font-size: 0.85rem; color: var(--muted); margin-top: 8px; font-style: italic; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .metric { text-align: center; }
-    .metric-value { font-size: 1.3rem; font-weight: 600; }
-    .metric-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-    .stale-banner { background: var(--red); color: #fff; text-align: center;
-                    padding: 8px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; }
-    .commentary { font-size: 0.85rem; line-height: 1.5; color: var(--muted); }
-    .footer { text-align: center; font-size: 0.7rem; color: #556; margin-top: 16px; }
-    .loading { text-align: center; color: var(--muted); padding: 40px; }
-    .dd-warn { color: var(--amber); }
-    .dd-danger { color: var(--red); }
-    .chart-card { padding: 12px; }
-    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .chart-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-    .toggle-group { display: flex; gap: 4px; }
-    .toggle-btn {
-      background: transparent; border: 1px solid #333; color: var(--muted);
-      padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer;
-      font-family: inherit; transition: all 0.15s;
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background:
+        radial-gradient(120% 50% at 20% 0%, rgba(138,164,255,0.08), transparent 60%),
+        radial-gradient(120% 60% at 80% 30%, rgba(214,189,138,0.05), transparent 60%),
+        linear-gradient(180deg, var(--bg-0), var(--bg-1));
+      background-attachment: fixed;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
-    .toggle-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
-    .toggle-btn:hover:not(.active) { border-color: var(--muted); }
-    #chart-container { width: 100%; min-height: 180px; }
-    .u-wrap { background: transparent !important; }
-    .chart-legend { text-align: center; font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
-    .strategy-select-card { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
-    .strategy-select-card label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+    .container {
+      max-width: 440px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      top: 160px;
+      right: -80px;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(138,164,255,0.14), transparent 70%);
+      filter: blur(20px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container > *:not(.orb) { position: relative; z-index: 1; }
+
+    /* ─── Typography helpers ─────────────────────────────────────── */
+    .mono { font-family: var(--font-mono); }
+    .serif { font-family: var(--font-display); font-style: italic; }
+
+    .overline {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+
+    .label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+
+    .tnum { font-variant-numeric: tabular-nums; }
+
+    /* ─── Stale banner ───────────────────────────────────────────── */
+    .stale-banner {
+      display: none;
+      background: rgba(232,144,136,0.12);
+      color: var(--neg);
+      border: 1px solid rgba(232,144,136,0.25);
+      border-radius: var(--radius-card);
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .stale-banner.show { display: block; }
+
+    /* ─── Header ─────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .logo-tile {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: var(--shadow-accent);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display);
+      font-style: italic;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .brand-text { flex: 1; min-width: 0; }
+    .brand-name {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--ink);
+    }
+    .brand-sub {
+      font-size: 10px;
+      color: var(--mute);
+      margin-top: 1px;
+    }
+    .header-right {
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 3px;
+    }
+    .header-date {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--mute);
+      letter-spacing: 0.4px;
+    }
+    .live-ind {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: var(--pos);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .live-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--pos);
+      box-shadow: 0 0 6px var(--pos);
+      animation: pulse 2s var(--ease) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ─── Glass card ─────────────────────────────────────────────── */
+    .glass {
+      background: linear-gradient(180deg, var(--glass-top), var(--glass-bot));
+      border: 1px solid var(--glass-edge);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      overflow: hidden;
+    }
+    .stack > * + * { margin-top: 16px; }
+
+    /* ─── Strategy selector ──────────────────────────────────────── */
+    .strategy-select-card {
+      display: none;
+      padding: 10px 14px;
+      align-items: center;
+      gap: 10px;
+    }
+    .strategy-select-card.show { display: flex; }
     .strategy-select-card select {
-      flex: 1; background: #0f1320; color: var(--fg);
-      border: 1px solid #2a3245; border-radius: 4px;
-      padding: 6px 10px; font-size: 0.85rem; font-family: inherit; cursor: pointer;
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      color: var(--ink);
+      border: 1px solid var(--glass-edge);
+      border-radius: var(--radius-inner);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      outline: none;
     }
-    .strategy-select-card select:focus { outline: none; border-color: var(--green); }
-    .accounts-card-header { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; }
-    .accounts-card-header.live { background: var(--green); color: #000; }
-    .accounts-card-header.paper { background: var(--amber); color: #000; }
-    .account-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 2px; border-top: 1px solid #1a2030; flex-wrap: wrap; }
-    .account-row:first-of-type { border-top: none; padding-top: 2px; }
-    .account-row-name { font-weight: 600; font-size: 0.9rem; flex: 1 1 auto; min-width: 0; }
-    .account-id { font-size: 0.65rem; color: #6b7a90; font-family: monospace; margin-left: 6px; font-weight: 400; }
-    .account-row-nlv { font-weight: 600; font-size: 0.95rem; flex: 0 0 auto; text-align: right; }
-    .account-row-positions { font-size: 0.7rem; color: var(--muted); flex: 1 1 100%; padding-left: 0; margin-top: 0; }
-    .account-row-return { font-size: 0.7rem; flex: 1 1 100%; padding-left: 0; margin-top: 0; }
-    .account-row-bench { color: var(--muted); margin-left: 4px; }
-    .account-disconnected { font-size: 0.8rem; color: #556; font-style: italic; }
-    @media (min-width: 600px) { .container { max-width: 520px; } .action-label { font-size: 3rem; } }
+    .strategy-select-card select:focus { border-color: var(--accent); }
+
+    /* ─── Hero (italic serif + gradient headline, mono kv grid) ──── */
+    .hero-card {
+      padding: 24px 24px 22px;
+    }
+    .signal-meta {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 2.2px;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-bottom: 10px;
+    }
+    .signal-headline {
+      font-family: var(--font-mono);
+      font-style: italic;
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -1px;
+      background: linear-gradient(180deg, var(--ink), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      word-break: break-all;
+    }
+    .signal-caret {
+      display: inline-block;
+      margin-left: 2px;
+      background: linear-gradient(180deg, var(--ink), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: caret 1s steps(1) infinite;
+    }
+    @keyframes caret { 50% { opacity: 0; } }
+    .signal-kv {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      row-gap: 4px;
+      column-gap: 14px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .kv-label { color: var(--mute); letter-spacing: 0.6px; }
+    .kv-value { color: var(--ink); }
+    .kv-value.kv-faint { color: var(--faint); font-style: italic; }
+    .kv-value.kv-gold { color: var(--gold); }
+    .kv-value.kv-neg  { color: var(--neg); }
+
+    /* ─── Market Cycle card ──────────────────────────────────────── */
+    .cycle-card { padding: 20px 22px 20px; }
+    .cycle-head {
+      margin-bottom: 8px;
+    }
+    .stage-name {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 22px;
+      line-height: 1.15;
+      letter-spacing: -0.3px;
+      background: linear-gradient(180deg, var(--ink), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 20px;
+    }
+    /* Cycle frame — 4 full-height columns with sine wave layered over */
+    .cycle-frame {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      height: 138px;
+      margin: 4px 0 14px;
+    }
+    .frame-col {
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.015);
+      transition: background 220ms var(--ease),
+                  border-color 220ms var(--ease),
+                  box-shadow 220ms var(--ease);
+    }
+    .frame-label {
+      position: absolute;
+      bottom: 10px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--faint);
+      transition: color 220ms var(--ease);
+      white-space: nowrap;
+    }
+    .frame-col.active[data-zone="accumulation"],
+    .frame-col.active[data-zone="expansion"] {
+      background: rgba(126,216,168,0.09);
+      border-color: rgba(126,216,168,0.50);
+      box-shadow: 0 0 16px rgba(126,216,168,0.18);
+    }
+    .frame-col.active[data-zone="accumulation"] .frame-label,
+    .frame-col.active[data-zone="expansion"] .frame-label { color: var(--pos); }
+    .frame-col.active[data-zone="distribution"] {
+      background: rgba(214,189,138,0.10);
+      border-color: rgba(214,189,138,0.55);
+      box-shadow: 0 0 16px rgba(214,189,138,0.20);
+    }
+    .frame-col.active[data-zone="distribution"] .frame-label { color: var(--gold); }
+    .frame-col.active[data-zone="contraction"] {
+      background: rgba(232,144,136,0.10);
+      border-color: rgba(232,144,136,0.55);
+      box-shadow: 0 0 16px rgba(232,144,136,0.20);
+    }
+    .frame-col.active[data-zone="contraction"] .frame-label { color: var(--neg); }
+
+    .cycle-wave {
+      position: absolute;
+      top: 10px;
+      left: 0; right: 0;
+      height: 92px;
+      width: 100%;
+      display: block;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .wave-dot-glow { transition: opacity 500ms var(--ease); }
+    .wave-dot, .wave-dot-core { transition: opacity 300ms var(--ease); }
+    .cycle-summary {
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--mute);
+    }
+
+    /* ─── Today grid (3 cols) ────────────────────────────────────── */
+    .section-card { padding: 18px 20px 20px; }
+    .section-card .overline { margin-bottom: 14px; }
+    .today-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px 10px;
+    }
+    .metric-cell { text-align: left; }
+    .metric-num {
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: -0.6px;
+      color: var(--ink);
+    }
+    .metric-num.pos { color: var(--pos); }
+    .metric-num.neg { color: var(--neg); }
+    .metric-sub {
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-top: 2px;
+    }
+
+    /* ─── Chart card ─────────────────────────────────────────────── */
+    .chart-card { padding: 18px 18px 14px; }
+    .chart-head-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px; gap: 10px;
+    }
+    .chart-title-block .overline { display: block; margin-bottom: 2px; }
+    .chart-title-block .display-sm {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: -0.3px;
+      color: var(--ink);
+    }
+    .seg {
+      display: inline-flex;
+      padding: 3px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-edge);
+      border-radius: 20px;
+    }
+    .seg button {
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--mute);
+      background: transparent;
+      border: 0;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: color 120ms var(--ease);
+      min-height: 22px;
+    }
+    .seg button.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      color: #0B0E14;
+      font-weight: 600;
+      box-shadow: var(--shadow-accent);
+    }
+    .view-toggle { margin-bottom: 10px; display: flex; justify-content: flex-end; }
+    .chart-wrap {
+      width: 100%;
+      position: relative;
+    }
+    .chart-wrap svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .chart-legend {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      gap: 12px;
+      font-size: 10px;
+      color: var(--mute);
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-swatch {
+      display: inline-block;
+      width: 14px; height: 2px;
+      border-radius: 2px;
+    }
+    .swatch-strategy {
+      background: linear-gradient(90deg, var(--accent), var(--gold));
+    }
+    .swatch-bench {
+      border-top: 1.5px dashed var(--faint);
+      height: 0;
+    }
+
+    /* ─── Lifetime stats ─────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px 16px;
+    }
+    .stat-cell { text-align: left; }
+    .stat-num {
+      font-size: 24px;
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: -0.6px;
+      color: var(--ink);
+    }
+    .stat-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-top: 4px;
+    }
+
+    /* ─── Accounts ───────────────────────────────────────────────── */
+    .accounts-section .overline { margin-bottom: 10px; display: block; }
+    .accounts-list > * + * { margin-top: 10px; }
+    .account-card { padding: 14px 16px 14px; }
+    .acc-row-1 {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px;
+    }
+    .acc-row-1 .broker {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--ink);
+    }
+    .acc-row-1 .masked {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--faint);
+    }
+    .acc-row-1 .value {
+      margin-left: auto;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.4px;
+      color: var(--ink);
+    }
+    .acc-row-2 {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 4px;
+    }
+    .acc-row-2 .holding {
+      font-size: 11px;
+      color: var(--mute);
+      flex: 1; min-width: 0;
+    }
+    .acc-row-2 .delta-wrap {
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .vs-bench {
+      font-size: 10px;
+      color: var(--faint);
+    }
+    .acc-row-3 {
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--faint);
+    }
+    .delta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .delta-pill.pos { background: rgba(126,216,168,0.12); color: var(--pos); }
+    .delta-pill.neg { background: rgba(232,144,136,0.12); color: var(--neg); }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+    }
+    .status-badge.live {
+      background: rgba(126,216,168,0.15);
+      color: var(--pos);
+    }
+    .status-badge.paper {
+      background: rgba(214,189,138,0.15);
+      color: var(--gold);
+    }
+    .status-badge .sd {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: currentColor;
+    }
+    .status-badge.live .sd {
+      box-shadow: 0 0 6px var(--pos);
+      animation: pulse 2s var(--ease) infinite;
+    }
+
+    .acc-disconnected {
+      font-size: 11px;
+      color: var(--faint);
+      font-style: italic;
+    }
+
+    /* ─── Footer ─────────────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--faint);
+      margin-top: 24px;
+      letter-spacing: 0.4px;
+    }
+
+    /* ─── Fade-in ────────────────────────────────────────────────── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(8px);
+      animation: fadeUp 500ms var(--ease) forwards;
+      animation-delay: var(--fi-delay, 0ms);
+    }
+    .fade-in.hero { transform: translateY(16px); animation-duration: 700ms; }
+    @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+    /* ─── Reduced motion ─────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0ms !important; transition-duration: 0ms !important; }
+      .fade-in { opacity: 1; transform: none; }
+      .stage-pointer { opacity: 1; }
+    }
+
+    /* ─── Larger viewports ───────────────────────────────────────── */
+    @media (min-width: 600px) {
+      .container { max-width: 460px; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div id="stale-banner" class="stale-banner" style="display:none;"></div>
-    <h1 id="header">SP500 12-Stage Strategy — loading…</h1>
+    <div class="orb"></div>
 
-    <div class="card strategy-select-card" id="strategy-select-card" style="display:none;">
-      <label for="strategy-select">Strategy</label>
+    <div id="stale-banner" class="stale-banner"></div>
+
+    <div class="header fade-in" style="--fi-delay: 0ms;">
+      <div class="logo-tile">P</div>
+      <div class="brand-text">
+        <div class="brand-name">Penta Capital Strategies</div>
+        <div class="brand-sub" id="brand-sub">SP500 12-Stage Strategy</div>
+      </div>
+      <div class="header-right">
+        <div class="header-date" id="header-date">—</div>
+        <div class="live-ind"><span class="live-dot"></span>live</div>
+      </div>
+    </div>
+
+    <div class="glass strategy-select-card fade-in" id="strategy-select-card" style="--fi-delay: 80ms;">
+      <label for="strategy-select" class="label" style="font-size: 10px;">Strategy</label>
       <select id="strategy-select"></select>
     </div>
 
-    <div class="card action-card">
-      <div id="action" class="action-label">—</div>
-      <div id="leverage" class="leverage"></div>
-      <div id="trigger" class="trigger"></div>
-    </div>
-
-    <div class="card grid grid-3">
-      <div class="metric">
-        <div id="gspc" class="metric-value">—</div>
-        <div class="metric-label" id="gspc-label">S&amp;P 500</div>
-      </div>
-      <div class="metric">
-        <div id="trade-pnl" class="metric-value">—</div>
-        <div class="metric-label">Trade P&amp;L</div>
-      </div>
-      <div class="metric">
-        <div id="ytd" class="metric-value">—</div>
-        <div class="metric-label">YTD Return</div>
-      </div>
-      <div class="metric">
-        <div id="strat-1d" class="metric-value">—</div>
-        <div class="metric-label">Strategy 1D</div>
-      </div>
-      <div class="metric">
-        <div id="spy-1d" class="metric-value">—</div>
-        <div class="metric-label" id="spy-1d-label">S&amp;P 500 1D</div>
-      </div>
-      <div class="metric">
-        <div id="dd" class="metric-value">—</div>
-        <div class="metric-label">Intra-trade DD</div>
-      </div>
-    </div>
-
-    <div class="card grid">
-      <div class="metric">
-        <div id="cagr" class="metric-value">—</div>
-        <div class="metric-label" id="cagr-label">CAGR</div>
-      </div>
-      <div class="metric">
-        <div id="sharpe" class="metric-value">—</div>
-        <div class="metric-label">Sharpe</div>
-      </div>
-      <div class="metric">
-        <div id="maxdd" class="metric-value">—</div>
-        <div class="metric-label">Max DD</div>
-      </div>
-      <div class="metric">
-        <div id="bars-in-trade" class="metric-value">—</div>
-        <div class="metric-label">Bars in trade</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div id="commentary" class="commentary">Loading…</div>
-    </div>
-
-    <div class="card" id="live-accounts-card" style="display:none;">
-      <div class="accounts-card-header live">Live</div>
-      <div id="live-accounts-rows"></div>
-    </div>
-    <div class="card" id="paper-accounts-card" style="display:none;">
-      <div class="accounts-card-header paper">Paper</div>
-      <div id="paper-accounts-rows"></div>
-    </div>
-
-    <div class="card chart-card" id="chart-card" style="display:none;">
-      <div class="chart-header">
-        <div class="toggle-group" id="view-toggle">
-          <button class="toggle-btn view-btn active" data-view="backtest">Backtest</button>
-          <button class="toggle-btn view-btn" data-view="live" id="live-btn" style="display:none">Live</button>
+    <div class="stack">
+      <!-- Hero — italic mono signal with blinking caret, gradient color -->
+      <div class="glass hero-card fade-in hero" style="--fi-delay: 120ms;">
+        <div class="signal-meta" id="signal-meta">POSITION · —</div>
+        <div class="signal-headline">
+          <span id="signal-label">—</span><span class="signal-caret" aria-hidden="true">_</span>
         </div>
-        <div class="toggle-group" id="years-toggle">
-          <button class="toggle-btn yr-btn active" data-years="1">1Y</button>
-          <button class="toggle-btn yr-btn" data-years="3">3Y</button>
-          <button class="toggle-btn yr-btn" data-years="5">5Y</button>
+        <div class="signal-kv">
+          <span class="kv-label">LEVERAGE</span>
+          <span class="kv-value" id="signal-leverage">—</span>
+          <span class="kv-label" id="signal-status-label">STATUS</span>
+          <span class="kv-value kv-faint" id="signal-status-value">NO CHANGE</span>
         </div>
       </div>
-      <div id="chart-container"></div>
-      <div class="chart-legend" id="chart-legend">
-        <span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;
-        <span style="color:#8899aa;">&#9644;</span> S&amp;P 500
+
+      <!-- Cycle -->
+      <div class="glass cycle-card fade-in" style="--fi-delay: 260ms;">
+        <div class="cycle-head">
+          <span class="overline">Market Cycle</span>
+        </div>
+        <div class="stage-name" id="stage-name">—</div>
+        <div class="cycle-frame" id="cycle-frame">
+          <div class="frame-col" data-zone="accumulation"><span class="frame-label">Accumulation</span></div>
+          <div class="frame-col" data-zone="expansion"><span class="frame-label">Expansion</span></div>
+          <div class="frame-col" data-zone="distribution"><span class="frame-label">Distribution</span></div>
+          <div class="frame-col" data-zone="contraction"><span class="frame-label">Contraction</span></div>
+          <svg class="cycle-wave" viewBox="0 0 400 96" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="waveGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%"  stop-color="#7ED8A8"/>
+                <stop offset="45%" stop-color="#D6BD8A"/>
+                <stop offset="55%" stop-color="#D6BD8A"/>
+                <stop offset="100%" stop-color="#E89088"/>
+              </linearGradient>
+              <linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(214,189,138,0.10)"/>
+                <stop offset="100%" stop-color="rgba(214,189,138,0.00)"/>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="48" x2="400" y2="48" stroke="rgba(255,255,255,0.05)" stroke-width="0.5" stroke-dasharray="3 4"/>
+            <path id="wave-area" d="" fill="url(#waveFill)" opacity="0"/>
+            <path id="wave-path" d="" stroke="url(#waveGrad)" stroke-width="2.5" fill="none"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+            <circle id="wave-dot-glow" cx="0" cy="48" r="11" fill="#D6BD8A" opacity="0" class="wave-dot-glow"/>
+            <circle id="wave-dot"      cx="0" cy="48" r="4.5" fill="#D6BD8A" opacity="0" class="wave-dot"/>
+            <circle id="wave-dot-core" cx="0" cy="48" r="1.5" fill="#FFFFFF" opacity="0" class="wave-dot-core"/>
+          </svg>
+        </div>
+        <div class="cycle-summary" id="cycle-summary">Loading…</div>
+      </div>
+
+      <!-- Today -->
+      <div class="glass section-card fade-in" style="--fi-delay: 380ms;">
+        <div class="overline">Today</div>
+        <div class="today-grid">
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-gspc">—</div>
+            <div class="metric-sub" id="m-gspc-label">S&amp;P 500</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-trade-pnl">—</div>
+            <div class="metric-sub">Trade P&amp;L</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-ytd">—</div>
+            <div class="metric-sub">YTD Return</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-strat-1d">—</div>
+            <div class="metric-sub">Strategy 1D</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-spy-1d">—</div>
+            <div class="metric-sub" id="m-spy-1d-label">S&amp;P 500 1D</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-num tnum" id="m-dd">—</div>
+            <div class="metric-sub">Intra-trade DD</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="glass chart-card fade-in" id="chart-card" style="--fi-delay: 560ms; display: none;">
+        <div class="chart-head-row">
+          <div class="chart-title-block">
+            <span class="overline">Backtest</span>
+            <div class="display-sm" id="chart-title">Strategy vs. S&amp;P 500</div>
+          </div>
+          <div class="seg" id="yr-toggle">
+            <button type="button" class="active" data-years="1">1Y</button>
+            <button type="button" data-years="3">3Y</button>
+            <button type="button" data-years="5">5Y</button>
+          </div>
+        </div>
+        <div class="view-toggle">
+          <div class="seg" id="view-toggle">
+            <button type="button" class="active" data-view="backtest">Backtest</button>
+            <button type="button" data-view="live" id="live-btn" style="display: none;">Live</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <svg id="equity-chart" viewBox="0 0 370 180" preserveAspectRatio="none" aria-hidden="true"></svg>
+        </div>
+        <div class="chart-legend" id="chart-legend">
+          <span class="legend-item">
+            <span class="legend-swatch swatch-strategy"></span>
+            <span id="legend-strategy-label">Strategy</span>
+            <span class="tnum" id="legend-strategy-val"></span>
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch swatch-bench"></span>
+            <span id="legend-bench-label">S&amp;P 500</span>
+            <span class="tnum" id="legend-bench-val"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Lifetime stats -->
+      <div class="glass section-card fade-in" style="--fi-delay: 720ms;">
+        <div class="overline">Lifetime stats</div>
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <div class="stat-num tnum" id="s-cagr">—</div>
+            <div class="stat-label" id="s-cagr-label">CAGR</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-num tnum" id="s-sharpe">—</div>
+            <div class="stat-label">Sharpe</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-num tnum" id="s-maxdd">—</div>
+            <div class="stat-label">Max DD</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-num tnum" id="s-bars">—</div>
+            <div class="stat-label">Bars in trade</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accounts -->
+      <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 880ms; display: none;">
+        <span class="overline">Accounts</span>
+        <div class="accounts-list" id="accounts-list"></div>
       </div>
     </div>
 
-    <div class="footer" id="footer"></div>
+    <div class="footer" id="footer">—</div>
   </div>
 
 <script>
+// ─── Config ─────────────────────────────────────────────────────
 const STATE_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/public_glance.json';
+const SUPABASE_BASE = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/';
+const DEFAULT_EQUITY_OBJECT = 'public_equity_curve.json';
+const DEFAULT_STRATEGY = 'SP500_12_Stage_Strategy';
 
-function fmt(n, d=1) { return n == null ? '—' : Number(n).toFixed(d); }
-function fmtPct(n, d=1) { return n == null ? '—' : Number(n).toFixed(d) + '%'; }
+const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ─── Utils ──────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmtNum(n, d=1) {
+  if (n == null || !isFinite(n)) return '—';
+  return Number(n).toFixed(d);
+}
+function fmtPct(n, d=1, signed=true) {
+  if (n == null || !isFinite(n)) return '—';
+  const v = Number(n);
+  const sign = signed && v > 0 ? '+' : '';
+  return sign + v.toFixed(d) + '%';
+}
+function fmtMoney(n) {
+  if (n == null || !isFinite(n)) return '—';
+  return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtMoneyShort(n) {
+  if (n == null || !isFinite(n)) return '—';
+  return '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+function toTitleCase(str) {
+  return String(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function parseFormatted(str) {
+  // Returns { value, prefix, suffix, decimals, thousands } from a formatted string
+  const m = String(str).match(/^([^\d.\-]*)(-?[\d,]+\.?\d*)(.*)$/);
+  if (!m) return null;
+  const prefix = m[1] || '';
+  const numStr = m[2].replace(/,/g, '');
+  const suffix = m[3] || '';
+  const value = Number(numStr);
+  if (!isFinite(value)) return null;
+  const dotIdx = numStr.indexOf('.');
+  const decimals = dotIdx >= 0 ? numStr.length - dotIdx - 1 : 0;
+  const thousands = m[2].includes(',');
+  return { value, prefix, suffix, decimals, thousands };
+}
+
+// ─── Count-up animation ─────────────────────────────────────────
+function animateCount(el, formatted, duration = 1100, delay = 0) {
+  if (formatted === '—' || formatted == null) {
+    el.textContent = '—';
+    return;
+  }
+  const parsed = parseFormatted(formatted);
+  if (!parsed) {
+    el.textContent = formatted;
+    return;
+  }
+  if (prefersReduced) {
+    el.textContent = formatted;
+    return;
+  }
+  const { value, prefix, suffix, decimals, thousands } = parsed;
+  const start = performance.now() + delay;
+  function fmt(v) {
+    let s;
+    if (thousands && decimals === 0) {
+      s = Math.round(v).toLocaleString();
+    } else {
+      s = v.toFixed(decimals);
+      if (thousands) {
+        const parts = s.split('.');
+        parts[0] = Number(parts[0]).toLocaleString();
+        s = parts.join('.');
+      }
+    }
+    const signShown = prefix.includes('+') || (value > 0 && prefix === '' && formatted.trim().startsWith('+'));
+    let finalPrefix = prefix;
+    if (value > 0 && formatted.trim().startsWith('+') && !prefix.includes('+')) finalPrefix = '+' + prefix;
+    return finalPrefix + s + suffix;
+  }
+  el.textContent = fmt(0);
+  function tick(now) {
+    const t = Math.max(0, Math.min(1, (now - start) / duration));
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out-cubic
+    el.textContent = fmt(value * eased);
+    if (t < 1) requestAnimationFrame(tick);
+    else el.textContent = formatted;
+  }
+  requestAnimationFrame(tick);
+}
+
+// ─── Leverage-change detection for hero ─────────────────────────
+// Prefers explicit fields from the payload; returns null when nothing
+// signals a transition (renders as STATUS / NO CHANGE).
+function detectLeverageChange(s) {
+  const raw =
+    (s.signal && s.signal.change) ||
+    (s.action && s.action.change) ||
+    null;
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text || text.toLowerCase() === 'no change' || text.toLowerCase() === 'none') return null;
+
+  // Parse "1× → 2×" / "1x -> 2x" / "1 -> 2" into signed direction
+  const m = text.match(/(\d+)\s*[x×]?\s*(?:→|->|-&gt;|>)\s*(\d+)/i);
+  let positive = null;
+  if (m) {
+    const from = parseInt(m[1], 10);
+    const to = parseInt(m[2], 10);
+    if (!isNaN(from) && !isNaN(to)) positive = to >= from;
+  }
+  return { text, positive };
+}
+
+// ─── Cycle phase derivation ─────────────────────────────────────
+// Intentionally coarse and qualitative. No cycle lengths, percentages,
+// or step counts are surfaced to the UI — only a pointer position (0-1),
+// one of four textbook zones, and a short label.
+function deriveCyclePhase(s) {
+  const action = (s.action && s.action.action) || '';
+  const lev = Number(s.leverage || 0);
+  const ddRaw = (s.pnl_state && s.pnl_state.intra_trade_dd_pct) ??
+                (s.catastrophe_stops && s.catastrophe_stops.equity_stop && s.catastrophe_stops.equity_stop.intra_dd_pct) ?? 0;
+  const dd = Number(ddRaw) || 0;
+  const ytd = (s.pnl_state && s.pnl_state.ytd_return_pct) || 0;
+
+  // Wave semantics tie to strategy state (not pure K42), so the wave
+  // and the hero always agree. Labels: "Zone · TradeState".
+  //   Accumulation (left)  = reserved (backend-only when K42 is wired)
+  //   Expansion    (l-mid) = long / burst, trend climbing
+  //   Peak         (mid)   = first DD appears while still long = topping tell
+  //   Distribution (r-mid) = long but pulling back
+  //   Contraction  (right) = cash
+  if (action === 'SELL' || lev === 0) {
+    return { position: 0.85, zone: 'contraction', label: 'Contraction · Cash' };
+  }
+  if (dd > 12) return { position: 0.70, zone: 'distribution', label: 'Distribution · Long' };
+  if (dd > 7)  return { position: 0.62, zone: 'distribution', label: 'Distribution · Long' };
+  if (dd > 2)  return { position: 0.54, zone: 'distribution', label: 'Distribution · Long' };
+  if (dd > 0.5) return { position: 0.50, zone: 'expansion',
+                         label: lev >= 3 ? 'Expansion · Burst · Cresting' : 'Expansion · Long · Cresting' };
+  if (lev >= 3) return { position: 0.45, zone: 'expansion', label: 'Expansion · Burst' };
+  return { position: 0.35, zone: 'expansion', label: 'Expansion · Long' };
+}
+
+function composeCycleSummary(s, phase) {
+  const lev = Number(s.leverage || 0);
+  const ddRaw = (s.pnl_state && s.pnl_state.intra_trade_dd_pct) ??
+                (s.catastrophe_stops && s.catastrophe_stops.equity_stop && s.catastrophe_stops.equity_stop.intra_dd_pct);
+  const dd = (ddRaw != null && isFinite(ddRaw)) ? Number(ddRaw) : null;
+
+  const parts = [];
+  if (phase.zone === 'accumulation') parts.push('Base region');
+  else if (phase.zone === 'expansion') parts.push('Trend intact');
+  else if (phase.zone === 'distribution') parts.push('Pulling back');
+  else parts.push('Risk off');
+
+  if (lev >= 3) parts.push('burst exposure');
+  else if (lev === 1) parts.push('standard exposure');
+  else parts.push('cash');
+
+  if (dd != null) {
+    if (dd < 0.5) parts.push('at peak');
+    else parts.push(`${dd.toFixed(1)}% from peak`);
+  }
+  return parts.join(' · ') + '.';
+}
+
+// ─── Sine-wave cycle visualization ──────────────────────────────
+// Renders one full cycle as a sine curve (trough → peak → trough).
+// - Left half slopes UP   = rising / bullish half of the cycle
+// - Right half slopes DOWN = falling / bearish half
+// The dot sits on the curve at `position` (0-1), colored by zone.
+const WAVE_W = 400, WAVE_H = 96;
+const WAVE_CENTER = WAVE_H / 2;
+const WAVE_AMP = WAVE_H * 0.36;
+let waveRendered = false;
+
+function wavePoint(t) {
+  // t in [0, 1] → phase in [0, 2π]
+  // Phase 0 = trough (bottom), phase π = peak (top), phase 2π = next trough
+  const phase = t * 2 * Math.PI;
+  const x = t * WAVE_W;
+  const y = WAVE_CENTER + WAVE_AMP * Math.cos(phase);
+  return [x, y];
+}
+
+function buildWavePath(n = 80) {
+  let d = '';
+  for (let i = 0; i <= n; i++) {
+    const [x, y] = wavePoint(i / n);
+    d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  return d;
+}
+
+function buildWaveArea(n = 80) {
+  // Area under the wave — used as subtle fill tint above zero line
+  let d = `M 0,${WAVE_CENTER}`;
+  for (let i = 0; i <= n; i++) {
+    const [x, y] = wavePoint(i / n);
+    d += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+  }
+  d += ` L ${WAVE_W},${WAVE_CENTER} Z`;
+  return d;
+}
+
+function zoneColor(zone) {
+  if (zone === 'accumulation' || zone === 'expansion') return '#7ED8A8';
+  if (zone === 'distribution') return '#D6BD8A';
+  if (zone === 'contraction') return '#E89088';
+  return '#D6BD8A';
+}
+
+function renderCycleWave(position, zone) {
+  const pathEl = document.getElementById('wave-path');
+  const areaEl = document.getElementById('wave-area');
+  const dotGlow = document.getElementById('wave-dot-glow');
+  const dot = document.getElementById('wave-dot');
+  const core = document.getElementById('wave-dot-core');
+  if (!pathEl) return;
+
+  // Build path on first render only
+  if (!waveRendered) {
+    pathEl.setAttribute('d', buildWavePath(96));
+    areaEl.setAttribute('d', buildWaveArea(96));
+
+    if (!prefersReduced) {
+      const len = pathEl.getTotalLength ? pathEl.getTotalLength() : 1200;
+      pathEl.style.strokeDasharray = `${len}`;
+      pathEl.style.strokeDashoffset = `${len}`;
+      pathEl.style.transition = 'stroke-dashoffset 1500ms cubic-bezier(.2,.7,.3,1) 400ms';
+      areaEl.style.transition = 'opacity 1000ms cubic-bezier(.2,.7,.3,1) 800ms';
+      requestAnimationFrame(() => {
+        pathEl.style.strokeDashoffset = '0';
+        areaEl.setAttribute('opacity', '1');
+      });
+    } else {
+      areaEl.setAttribute('opacity', '1');
+    }
+    waveRendered = true;
+  }
+
+  // Place dot at current position on the curve
+  const [dx, dy] = wavePoint(Math.max(0, Math.min(1, position)));
+  const color = zoneColor(zone);
+
+  [dotGlow, dot].forEach(el => { if (el) el.setAttribute('fill', color); });
+  dotGlow.setAttribute('cx', dx);
+  dotGlow.setAttribute('cy', dy);
+  dot.setAttribute('cx', dx);
+  dot.setAttribute('cy', dy);
+  core.setAttribute('cx', dx);
+  core.setAttribute('cy', dy);
+
+  // Smooth subsequent moves
+  [dotGlow, dot, core].forEach(el => {
+    el.style.transition = 'cx 600ms cubic-bezier(.2,.7,.3,1), cy 600ms cubic-bezier(.2,.7,.3,1), fill 400ms linear';
+  });
+
+  // Fade in dot after wave draws
+  const delay = prefersReduced ? 0 : 1700;
+  setTimeout(() => {
+    dotGlow.setAttribute('opacity', '0.28');
+    dot.setAttribute('opacity', '1');
+    core.setAttribute('opacity', '1');
+  }, delay);
+}
+
+// ─── Stale check ────────────────────────────────────────────────
 function isStale(asOf) {
-  // Check if as_of_date is older than 2 calendar days (handles weekends gracefully)
-  const d = new Date(asOf + 'T16:00:00-04:00'); // NYSE close in ET
-  const now = new Date();
-  const diffMs = now - d;
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  // 3+ calendar days = likely stale (covers weekends: Fri→Mon = 3 days)
+  if (!asOf) return false;
+  const d = new Date(asOf + 'T16:00:00-04:00');
+  const diffDays = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
   return diffDays > 3.5;
 }
 
-// Global state for strategy switching without re-fetching
-let currentState = null;
-let currentStrategy = null;
-const DEFAULT_STRATEGY = 'SP500_12_Stage_Strategy';
-
+// ─── URL hash routing ───────────────────────────────────────────
 function getStrategyFromHash() {
-  // URL hash → strategy key, e.g. #qqq → QQQ_via_SP500_12_Stage_Strategy
   const h = (location.hash || '').replace(/^#/, '').toLowerCase();
   if (!h) return null;
   if (h === 'qqq' || h === 'qqq_via_sp500_12_stage_strategy') return 'QQQ_via_SP500_12_Stage_Strategy';
   if (h === 'sp500' || h === 'spx' || h === 'sp500_12_stage_strategy') return 'SP500_12_Stage_Strategy';
   return null;
 }
-
-function shortHashFor(strategyKey) {
-  if (strategyKey === 'QQQ_via_SP500_12_Stage_Strategy') return 'qqq';
-  if (strategyKey === 'SP500_12_Stage_Strategy') return 'sp500';
-  return strategyKey.toLowerCase();
+function shortHashFor(key) {
+  if (key === 'QQQ_via_SP500_12_Stage_Strategy') return 'qqq';
+  if (key === 'SP500_12_Stage_Strategy') return 'sp500';
+  return key.toLowerCase();
 }
 
+// ─── Global state ───────────────────────────────────────────────
+let currentState = null;
+let currentStrategy = null;
+
+// ─── Load state ─────────────────────────────────────────────────
 async function load() {
   try {
     const resp = await fetch(STATE_URL, { cache: 'no-store' });
@@ -213,307 +1094,319 @@ async function load() {
     currentState = s;
 
     const asOf = s.as_of_date || 'unknown';
-    const action = (s.action && s.action.action) || 'UNKNOWN';
-    const lev = s.leverage != null ? s.leverage : '?';
-    const trigger = (s.action && s.action.trigger) || '';
+    $('header-date').textContent = asOf;
 
-    // Stale banner (shared across strategies — reflects pipeline freshness)
     if (isStale(asOf)) {
-      const banner = document.getElementById('stale-banner');
-      banner.textContent = `⚠ STALE — last update: ${asOf}`;
-      banner.style.display = 'block';
+      const b = $('stale-banner');
+      b.textContent = `Stale — last update ${asOf}`;
+      b.classList.add('show');
+    } else {
+      $('stale-banner').classList.remove('show');
     }
 
-    // Populate strategy selector from state.strategies, then render the
-    // initial selection (URL hash > default).
+    // Strategy selector
     const strategies = s.strategies || {};
-    const select = document.getElementById('strategy-select');
+    const select = $('strategy-select');
     select.innerHTML = '';
-    Object.keys(strategies).forEach(function(key) {
+    Object.keys(strategies).forEach(k => {
       const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = strategies[key].label || key;
+      opt.value = k;
+      opt.textContent = strategies[k].label || k;
       select.appendChild(opt);
     });
     if (Object.keys(strategies).length > 1) {
-      document.getElementById('strategy-select-card').style.display = '';
+      $('strategy-select-card').classList.add('show');
     }
 
     const initialKey = getStrategyFromHash() || (
-      Object.keys(strategies).find(function(k) { return strategies[k].is_default; })
-      || DEFAULT_STRATEGY
+      Object.keys(strategies).find(k => strategies[k].is_default) || DEFAULT_STRATEGY
     );
-    select.value = initialKey;
+    if (select.querySelector(`option[value="${initialKey}"]`)) select.value = initialKey;
+
     renderForStrategy(s, initialKey);
 
-    // Action card (shared — same SPX-driven action across strategies)
-    const actionEl = document.getElementById('action');
-    let displayAction = action;
-    if (action === 'HOLD') {
-      displayAction = lev > 0 ? 'LONG HOLD' : 'CASH HOLD';
-    }
-    actionEl.textContent = displayAction;
-    actionEl.className = `action-label action-${action}`;
-    document.getElementById('leverage').textContent = `${lev}× leverage`;
-    document.getElementById('trigger').textContent = trigger;
+    // Hero — terminal-style signal readout
+    const action = (s.action && s.action.action) || 'UNKNOWN';
+    const lev = s.leverage != null ? s.leverage : '?';
 
-    // Bars in trade (shared — same for all strategies, comes from leverage_state)
+    let displayAction;
+    if (action === 'HOLD') displayAction = lev > 0 ? 'LONG HOLD' : 'CASH HOLD';
+    else if (action === 'BUY') displayAction = 'BUY';
+    else if (action === 'SELL') displayAction = 'SELL';
+    else if (action === 'ADJUST') displayAction = 'ADJUST';
+    else displayAction = action.toUpperCase().replace(/_/g, ' ');
+
+    $('signal-meta').textContent = `POSITION · ${asOf}`;
+    // Terminal readout: spaces → underscores, trailing _ is the blinking caret.
+    $('signal-label').textContent = displayAction.replace(/ /g, '_');
+    $('signal-leverage').textContent = `${lev}×`;
+
+    // Change / status row
+    const change = detectLeverageChange(s);
+    const statusLabel = $('signal-status-label');
+    const statusValue = $('signal-status-value');
+    statusValue.classList.remove('kv-faint', 'kv-gold', 'kv-neg');
+    if (change) {
+      statusLabel.textContent = 'CHANGE';
+      statusValue.textContent = change.text;
+      if (change.positive === true) statusValue.classList.add('kv-gold');
+      else if (change.positive === false) statusValue.classList.add('kv-neg');
+    } else {
+      statusLabel.textContent = 'STATUS';
+      statusValue.textContent = 'NO CHANGE';
+      statusValue.classList.add('kv-faint');
+    }
+
+    // Bars in trade
     const ls = s.leverage_state || {};
     const hybrid = ls.tla_tle_hybrid || {};
-    document.getElementById('bars-in-trade').textContent =
-      hybrid.bars_since_entry != null ? hybrid.bars_since_entry : '—';
-    // Market + PnL metrics are now per-strategy — see renderForStrategy().
+    const bars = hybrid.bars_since_entry;
+    animateCount($('s-bars'), bars != null ? String(bars) : '—', 1100, 720);
 
-    // Commentary + footer (shared)
-    const comm = s.simple_commentary || s.commentary || 'No commentary available.';
-    document.getElementById('commentary').textContent = comm;
-    const gen = s.generated_at_utc || '';
-    document.getElementById('footer').textContent = `Generated: ${gen}`;
+    // Cycle — prefer the backend-computed block; fall back to heuristic.
+    // Backend ships { position: 0-1, zone, label }. If absent, derive client-side.
+    const phase = (s.cycle && s.cycle.zone) ? s.cycle : deriveCyclePhase(s);
+    $('stage-name').textContent = phase.label || '—';
+    $('cycle-summary').textContent = composeCycleSummary(s, phase);
+    renderCycleWave(phase.position ?? 0, phase.zone);
+
+    // Active stage column (highlight with zone color)
+    document.querySelectorAll('#cycle-frame .frame-col').forEach(el => {
+      el.classList.toggle('active', el.dataset.zone === phase.zone);
+    });
+
+    // Footer
+    $('footer').textContent = s.generated_at_utc ? `Generated ${s.generated_at_utc}` : '';
 
   } catch (err) {
-    document.getElementById('header').textContent = 'SP500 12-Stage Strategy — Error';
-    document.getElementById('commentary').textContent = `Failed to load state: ${err.message}`;
+    $('signal-label').textContent = 'Error';
+    $('cycle-summary').textContent = `Failed to load state: ${err.message}`;
+    console.error(err);
   }
 }
 
-// ── Strategy-specific rendering ────────────────────────────────────
-// Called on initial load AND every time the user changes the strategy
-// dropdown. Updates the page header, headline KPIs, trading accounts,
-// and triggers the equity-chart reload — but does NOT touch the shared
-// action/commentary/cycle state which is identical across strategies.
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, function(c) {
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-  });
-}
-
-function buildAccountRow(name, data) {
-  if (!data) return null;
-  const row = document.createElement('div');
-  row.className = 'account-row';
-  const displayName = name.replace(/_/g, ' ').toUpperCase();
-  const acctId = data.account_id_masked || '';
-
-  const nameDiv = document.createElement('div');
-  nameDiv.className = 'account-row-name';
-  let nameHtml = escapeHtml(displayName);
-  if (acctId) nameHtml += '<span class="account-id">' + escapeHtml(acctId) + '</span>';
-  nameDiv.innerHTML = nameHtml;
-  row.appendChild(nameDiv);
-
-  const nlvDiv = document.createElement('div');
-  nlvDiv.className = 'account-row-nlv';
-  if (!data.connected) {
-    nlvDiv.innerHTML = '<span class="account-disconnected">Not connected</span>';
-    row.appendChild(nlvDiv);
-    return row;
-  }
-  nlvDiv.textContent = data.equity != null
-    ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
-    : '\u2014';
-  row.appendChild(nlvDiv);
-
-  if (data.positions && data.positions.length > 0) {
-    const posDiv = document.createElement('div');
-    posDiv.className = 'account-row-positions';
-    posDiv.innerHTML = data.positions.map(function(p) {
-      var qty = p.qty != null ? Number(p.qty).toFixed(2) : '?';
-      var val = p.market_value != null
-        ? ' ($' + Number(p.market_value).toLocaleString(undefined, {maximumFractionDigits: 0}) + ')'
-        : '';
-      return escapeHtml(qty + ' ' + p.symbol + val);
-    }).join(' · ');
-    row.appendChild(posDiv);
-  } else {
-    const posDiv = document.createElement('div');
-    posDiv.className = 'account-row-positions';
-    posDiv.textContent = 'No positions yet (cash)';
-    row.appendChild(posDiv);
-  }
-
-  const inc = data.inception;
-  if (inc && inc.return_pct != null) {
-    const retDiv = document.createElement('div');
-    retDiv.className = 'account-row-return';
-    const sign = inc.return_pct >= 0 ? '+' : '';
-    const acctColor = inc.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
-    let html = '<span style="color:' + acctColor + ';font-weight:600;">'
-      + sign + inc.return_pct.toFixed(2) + '%</span>'
-      + '<span class="account-row-bench">since ' + escapeHtml(inc.inception_date) + '</span>';
-    if (inc.bench_return_pct != null) {
-      const benchSign = inc.bench_return_pct >= 0 ? '+' : '';
-      const benchLabel = inc.bench_label || 'Benchmark';
-      html += '<span class="account-row-bench">(' + escapeHtml(benchLabel) + ': '
-        + benchSign + inc.bench_return_pct.toFixed(2) + '%)</span>';
-    }
-    retDiv.innerHTML = html;
-    row.appendChild(retDiv);
-  }
-  return row;
-}
-
-function fillCard(cardId, rowsId, accounts) {
-  const rowsContainer = document.getElementById(rowsId);
-  rowsContainer.innerHTML = '';
-  const names = Object.keys(accounts || {});
-  names.forEach(function(name) {
-    const row = buildAccountRow(name, accounts[name]);
-    if (row) rowsContainer.appendChild(row);
-  });
-  document.getElementById(cardId).style.display = names.length > 0 ? '' : 'none';
-}
-
+// ─── Per-strategy render ────────────────────────────────────────
 function renderForStrategy(s, strategyKey) {
   currentStrategy = strategyKey;
   const strat = (s.strategies || {})[strategyKey] || {};
   const stratLabel = strat.label || 'SP500 12-Stage Strategy';
-  const asOf = s.as_of_date || 'unknown';
 
-  // Header label
-  document.getElementById('header').textContent = `${stratLabel} — ${asOf}`;
-  document.title = `${stratLabel} — Glance`;
+  $('brand-sub').textContent = stratLabel;
+  document.title = `Penta — ${stratLabel}`;
 
-  // Headline KPIs — read from strategy.headline if present, else fallback
-  // to top-level state.headline.gspc (SP500 default).
+  // Headline KPIs
   let h = {};
   if (strat.headline) {
-    // headline shape: {<bench_key>: {cagr, sharpe, maxdd, span}}
     const hKeys = Object.keys(strat.headline);
     if (hKeys.length > 0) h = strat.headline[hKeys[0]] || {};
   }
-  if (!h.cagr && s.headline && s.headline.gspc) {
-    h = s.headline.gspc;
-  }
+  if (!h.cagr && s.headline && s.headline.gspc) h = s.headline.gspc;
   const benchSym = (strat.benchmark && strat.benchmark.symbol) || 'GSPC';
-  document.getElementById('cagr').textContent = fmtPct(h.cagr);
-  document.getElementById('cagr-label').textContent = `CAGR (${benchSym})`;
-  document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
-  document.getElementById('maxdd').textContent = fmtPct(h.maxdd);
 
-  // ── Market + PnL metrics — per-strategy overlay ─────────────────
-  // SP500 view falls back to top-level state.market_state / state.pnl_state
-  // (existing default). QQQ view uses strat.market_state / strat.pnl_state
-  // computed from state_timeseries_qqq.parquet so the metric box reflects
-  // QQQ-execution numbers when QQQ is selected.
+  animateCount($('s-cagr'), h.cagr != null ? fmtPct(h.cagr, 1, false) : '—', 1100, 720);
+  $('s-cagr-label').textContent = `CAGR (${benchSym})`;
+  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 3) : '—', 1100, 770);
+  animateCount($('s-maxdd'), h.maxdd != null ? fmtPct(h.maxdd, 1, false) : '—', 1100, 820);
+
+  // Market / PnL
   const ms = strat.market_state || s.market_state || {};
   const ps = strat.pnl_state || s.pnl_state || {};
   const cs = s.catastrophe_stops || {};
   const eq_stop = cs.equity_stop || {};
 
-  // Benchmark close + label (first metric tile)
   const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
   const benchLabel = ms.bench_label || (strat.benchmark && strat.benchmark.label) || 'S&P 500';
-  document.getElementById('gspc').textContent = fmt(benchClose, 1);
-  document.getElementById('gspc-label').textContent = benchLabel;
+  animateCount($('m-gspc'), benchClose != null ? fmtNum(benchClose, 1) : '—', 1100, 430);
+  $('m-gspc-label').textContent = benchLabel;
 
-  // Trade P&L (unrealized return)
   const tradePnl = ps.unrealized_return_pct;
-  const tradePnlEl = document.getElementById('trade-pnl');
-  tradePnlEl.textContent = fmtPct(tradePnl);
-  tradePnlEl.style.color = tradePnl != null ? (tradePnl >= 0 ? 'var(--green)' : 'var(--red)') : '';
+  const tpEl = $('m-trade-pnl');
+  animateCount(tpEl, tradePnl != null ? fmtPct(tradePnl) : '—', 1100, 480);
+  tpEl.classList.toggle('pos', tradePnl != null && tradePnl >= 0);
+  tpEl.classList.toggle('neg', tradePnl != null && tradePnl < 0);
 
-  // YTD return
-  const ytdPct = ps.ytd_return_pct;
-  const ytdEl = document.getElementById('ytd');
-  ytdEl.textContent = fmtPct(ytdPct);
-  ytdEl.style.color = ytdPct != null ? (ytdPct >= 0 ? 'var(--green)' : 'var(--red)') : '';
+  const ytd = ps.ytd_return_pct;
+  const ytdEl = $('m-ytd');
+  animateCount(ytdEl, ytd != null ? fmtPct(ytd) : '—', 1100, 530);
+  ytdEl.classList.toggle('pos', ytd != null && ytd >= 0);
+  ytdEl.classList.toggle('neg', ytd != null && ytd < 0);
 
-  // Strategy 1D return
   const stratDay = ps.yesterday_strategy_return_pct;
-  const stratDayEl = document.getElementById('strat-1d');
-  stratDayEl.textContent = fmtPct(stratDay);
-  stratDayEl.style.color = stratDay != null ? (stratDay >= 0 ? 'var(--green)' : 'var(--red)') : '';
+  const sdEl = $('m-strat-1d');
+  animateCount(sdEl, stratDay != null ? fmtPct(stratDay, 2) : '—', 1100, 580);
+  sdEl.classList.toggle('pos', stratDay != null && stratDay >= 0);
+  sdEl.classList.toggle('neg', stratDay != null && stratDay < 0);
 
-  // Benchmark 1D return — pnl uses 'yesterday_bench_return_pct' for QQQ,
-  // legacy 'yesterday_spy_return_pct' for SP500 top-level. Try both.
-  const benchDay = ps.yesterday_bench_return_pct != null
-    ? ps.yesterday_bench_return_pct
-    : ps.yesterday_spy_return_pct;
-  const benchDayEl = document.getElementById('spy-1d');
-  benchDayEl.textContent = fmtPct(benchDay);
-  benchDayEl.style.color = benchDay != null ? (benchDay >= 0 ? 'var(--green)' : 'var(--red)') : '';
-  document.getElementById('spy-1d-label').textContent = benchLabel + ' 1D';
+  const benchDay = ps.yesterday_bench_return_pct != null ? ps.yesterday_bench_return_pct : ps.yesterday_spy_return_pct;
+  const bdEl = $('m-spy-1d');
+  animateCount(bdEl, benchDay != null ? fmtPct(benchDay, 2) : '—', 1100, 630);
+  bdEl.classList.toggle('pos', benchDay != null && benchDay >= 0);
+  bdEl.classList.toggle('neg', benchDay != null && benchDay < 0);
+  $('m-spy-1d-label').textContent = benchLabel + ' 1D';
 
-  // Intra-trade DD — for QQQ comes from pnl_state.intra_trade_dd_pct;
-  // for SP500 stays in catastrophe_stops.equity_stop.intra_dd_pct.
   const ddPct = (ps.intra_trade_dd_pct != null) ? ps.intra_trade_dd_pct : eq_stop.intra_dd_pct;
-  const ddEl = document.getElementById('dd');
-  ddEl.textContent = fmtPct(ddPct);
-  ddEl.className = 'metric-value';
-  if (ddPct != null) {
-    if (ddPct > 10) ddEl.className = 'metric-value dd-danger';
-    else if (ddPct > 5) ddEl.className = 'metric-value dd-warn';
-  }
+  const ddEl = $('m-dd');
+  animateCount(ddEl, ddPct != null ? fmtPct(ddPct, 1, false) : '—', 1100, 680);
+  ddEl.classList.remove('pos', 'neg');
+  if (ddPct != null && ddPct > 10) ddEl.classList.add('neg');
 
-  // Trading accounts (per-strategy split)
+  // Chart title & legend labels
+  $('chart-title').textContent = `Strategy vs. ${benchLabel}`;
+  $('legend-bench-label').textContent = benchLabel;
+
+  // Accounts
   const ta = strat.trading_accounts || s.trading_accounts || {};
-  fillCard('live-accounts-card', 'live-accounts-rows', ta.live_accounts || {});
-  fillCard('paper-accounts-card', 'paper-accounts-rows', ta.paper_accounts || {});
+  renderAccounts(ta);
 
-  // URL hash so the view is shareable
+  // URL hash
   const newHash = '#' + shortHashFor(strategyKey);
-  if (location.hash !== newHash) {
-    history.replaceState(null, '', newHash);
-  }
+  if (location.hash !== newHash) history.replaceState(null, '', newHash);
 
-  // Equity chart reloads using currentStrategy's URL.
-  // Defensive check: on initial load(), the second <script> block (where
-  // loadEquityCurve is defined) hasn't run yet — skip in that case;
-  // the explicit loadEquityCurve() call at the bottom of that block
-  // handles the first render.
+  // Chart
   if (typeof loadEquityCurve === 'function') loadEquityCurve();
 }
 
-// Strategy selector change handler
-document.getElementById('strategy-select').addEventListener('change', function(e) {
+// ─── Accounts ───────────────────────────────────────────────────
+function renderAccounts(ta) {
+  const list = $('accounts-list');
+  list.innerHTML = '';
+  const section = $('accounts-section');
+
+  const groups = [
+    { key: 'live_accounts', badge: 'LIVE' },
+    { key: 'paper_accounts', badge: 'PAPER' },
+  ];
+
+  let total = 0;
+  groups.forEach((g, gi) => {
+    const accounts = ta[g.key] || {};
+    Object.keys(accounts).forEach((name, i) => {
+      const card = buildAccountCard(name, accounts[name], g.badge, total);
+      if (card) {
+        list.appendChild(card);
+        total++;
+      }
+    });
+  });
+  section.style.display = total > 0 ? '' : 'none';
+}
+
+function buildAccountCard(name, data, badge, idx) {
+  if (!data) return null;
+  const card = document.createElement('div');
+  card.className = 'glass account-card fade-in';
+  card.style.setProperty('--fi-delay', (880 + idx * 100) + 'ms');
+
+  const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const acctId = data.account_id_masked || '';
+
+  // Row 1: badge + broker + masked + value
+  const r1 = document.createElement('div');
+  r1.className = 'acc-row-1';
+  const badgeHtml = `<span class="status-badge ${badge.toLowerCase()}"><span class="sd"></span>${badge}</span>`;
+  let row1Html = badgeHtml + `<span class="broker">${esc(displayName)}</span>`;
+  if (acctId) row1Html += `<span class="masked">${esc(acctId)}</span>`;
+  if (data.connected === false) {
+    row1Html += `<span class="value"><span class="acc-disconnected">Not connected</span></span>`;
+  } else if (data.equity != null) {
+    row1Html += `<span class="value tnum">${esc(fmtMoney(data.equity))}</span>`;
+  } else {
+    row1Html += `<span class="value">—</span>`;
+  }
+  r1.innerHTML = row1Html;
+  card.appendChild(r1);
+
+  if (data.connected === false) return card;
+
+  // Row 2: holding + delta
+  const r2 = document.createElement('div');
+  r2.className = 'acc-row-2';
+  let holdingText = 'No positions (cash)';
+  if (data.positions && data.positions.length) {
+    holdingText = data.positions.map(p => {
+      const q = p.qty != null ? Number(p.qty).toFixed(2) : '?';
+      const v = p.market_value != null ? ` · ${fmtMoneyShort(p.market_value)}` : '';
+      return `${q} ${p.symbol}${v}`;
+    }).join(' · ');
+  }
+  const holdingDiv = document.createElement('div');
+  holdingDiv.className = 'holding';
+  holdingDiv.textContent = holdingText;
+  r2.appendChild(holdingDiv);
+
+  const inc = data.inception;
+  if (inc && inc.return_pct != null) {
+    const wrap = document.createElement('div');
+    wrap.className = 'delta-wrap';
+    const pos = inc.return_pct >= 0;
+    const arrow = pos ? '▲' : '▼';
+    const pill = document.createElement('span');
+    pill.className = `delta-pill ${pos ? 'pos' : 'neg'} tnum`;
+    pill.textContent = `${arrow} ${pos ? '+' : ''}${inc.return_pct.toFixed(2)}%`;
+    wrap.appendChild(pill);
+    if (inc.bench_return_pct != null) {
+      const bs = document.createElement('span');
+      bs.className = 'vs-bench';
+      const bl = inc.bench_label || 'Bench';
+      const sign = inc.bench_return_pct >= 0 ? '+' : '';
+      bs.textContent = `vs ${bl} ${sign}${inc.bench_return_pct.toFixed(2)}%`;
+      wrap.appendChild(bs);
+    }
+    r2.appendChild(wrap);
+  }
+  card.appendChild(r2);
+
+  // Row 3: since
+  if (inc && inc.inception_date) {
+    const r3 = document.createElement('div');
+    r3.className = 'acc-row-3 mono';
+    r3.textContent = `since ${inc.inception_date}`;
+    card.appendChild(r3);
+  }
+
+  return card;
+}
+
+// ─── Strategy select + hash ─────────────────────────────────────
+$('strategy-select').addEventListener('change', e => {
   if (currentState) renderForStrategy(currentState, e.target.value);
 });
-
-// React to URL hash changes (back/forward navigation)
-window.addEventListener('hashchange', function() {
+window.addEventListener('hashchange', () => {
   const k = getStrategyFromHash();
   if (k && currentState && k !== currentStrategy) {
-    document.getElementById('strategy-select').value = k;
+    $('strategy-select').value = k;
     renderForStrategy(currentState, k);
   }
 });
 
 load();
-// Auto-refresh every 5 minutes (re-renders for the current strategy)
 setInterval(load, 5 * 60 * 1000);
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
 <script>
-// ── Equity Performance Chart ─────────────────────────────────────
-// URL is selected per strategy from currentState.strategies[currentStrategy].
-// Falls back to the SP500 curve when the per-strategy URL isn't published yet.
-const SUPABASE_BASE = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/';
-const DEFAULT_EQUITY_OBJECT = 'public_equity_curve.json';
-
+// ─── Equity curve chart (custom SVG) ────────────────────────────
 let eqData = null;
-let uplotInst = null;
-let chartView = 'backtest';  // 'backtest' or 'live'
+let chartView = 'backtest';
 let chartYears = 1;
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const CHART_PAD = { l: 30, r: 12, t: 14, b: 26 };
+const CHART_W = 370;
+const CHART_H = 180;
 
 function normalizeFromStart(arr) {
   const base = arr[0];
   if (!base || base === 0) return arr.map(() => 0);
   return arr.map(v => (v / base - 1) * 100);
 }
-
 function sliceToYears(ts, years) {
   const last = ts[ts.length - 1];
   const cutoff = last - years * 365.25 * 86400;
-  let start = 0;
-  for (let i = 0; i < ts.length; i++) {
-    if (ts[i] >= cutoff) { start = i; break; }
-  }
-  return start;
+  for (let i = 0; i < ts.length; i++) if (ts[i] >= cutoff) return i;
+  return 0;
 }
 
 function currentBenchLabel() {
-  // Pull benchmark label from the active strategy block (set by renderForStrategy).
   if (currentState && currentStrategy) {
     const strat = (currentState.strategies || {})[currentStrategy];
     if (strat && strat.benchmark && strat.benchmark.label) return strat.benchmark.label;
@@ -521,160 +1414,304 @@ function currentBenchLabel() {
   return 'S&P 500';
 }
 
-function updateLegend() {
-  const el = document.getElementById('chart-legend');
-  const benchLabel = currentBenchLabel();
-  if (chartView === 'live') {
-    const acctType = (eqData.actual_account_type || 'paper').toUpperCase();
-    el.innerHTML = '<span style="color:#f59e0b;">&#9644;</span> Actual (' + acctType + ') &nbsp;' +
-                   '<span style="color:#8899aa;">&#9644;</span> ' + escapeHtml(benchLabel);
-  } else {
-    el.innerHTML = '<span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;' +
-                   '<span style="color:#8899aa;">&#9644;</span> ' + escapeHtml(benchLabel);
-  }
+function pathFromPoints(pts) {
+  if (!pts.length) return '';
+  return pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
+}
+function areaFromPoints(pts, yBase) {
+  if (!pts.length) return '';
+  const start = pts[0], end = pts[pts.length - 1];
+  return `M${start[0].toFixed(2)},${yBase.toFixed(2)} L` +
+    pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' L') +
+    ` L${end[0].toFixed(2)},${yBase.toFixed(2)} Z`;
+}
+
+function makeEl(tag, attrs) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
 }
 
 function renderChart() {
   if (!eqData) return;
+  const svg = $('equity-chart');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${CHART_W} ${CHART_H}`);
 
-  var ts, line1, bm, seriesColor, seriesLabel, seriesFill;
-
+  let ts, line1, bm, seriesLabel;
   if (chartView === 'live' && eqData.actual_ts && eqData.actual_ts.length >= 2) {
-    // Live view: actual equity + its matching S&P 500
     ts = eqData.actual_ts;
     line1 = eqData.actual_eq;
-    bm = eqData.actual_bm || eqData.actual_eq; // fallback
-    seriesColor = '#f59e0b';
+    bm = eqData.actual_bm || eqData.actual_eq;
     seriesLabel = 'Actual';
-    seriesFill = 'rgba(245,158,11,0.08)';
   } else {
-    // Backtest view (default): strategy + S&P 500
-    var start = sliceToYears(eqData.ts, chartYears);
+    const start = sliceToYears(eqData.ts, chartYears);
     ts = eqData.ts.slice(start);
     line1 = eqData.eq.slice(start);
     bm = eqData.bm.slice(start);
-    seriesColor = '#22c55e';
     seriesLabel = 'Strategy';
-    seriesFill = 'rgba(34,197,94,0.08)';
   }
 
-  var line1Pct = normalizeFromStart(line1);
-  var bmPct = normalizeFromStart(bm);
+  const line1Pct = normalizeFromStart(line1);
+  const bmPct = normalizeFromStart(bm);
 
-  var container = document.getElementById('chart-container');
-  if (uplotInst) { uplotInst.destroy(); uplotInst = null; }
-  container.innerHTML = '';
+  // Scales
+  const allY = line1Pct.concat(bmPct);
+  const yMin = Math.min(...allY) - 2;
+  const yMax = Math.max(...allY) + 2;
+  const xMin = ts[0];
+  const xMax = ts[ts.length - 1];
 
-  var w = container.clientWidth || 340;
-  var opts = {
-    width: w, height: 180,
-    cursor: { show: true, x: true, y: false },
-    legend: { show: false },
-    scales: { x: { time: true }, y: { auto: true } },
-    axes: [
-      {
-        stroke: '#556',
-        grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 },
-        ticks: { stroke: 'rgba(255,255,255,0.1)', width: 1 },
-        font: '10px system-ui', gap: 4,
-      },
-      {
-        stroke: '#556',
-        grid: { stroke: 'rgba(255,255,255,0.05)', width: 1 },
-        ticks: { stroke: 'rgba(255,255,255,0.1)', width: 1 },
-        font: '10px system-ui', gap: 4,
-        values: function(u, vals) { return vals.map(function(v) { return v.toFixed(0) + '%'; }); },
-        size: 42,
-      },
-    ],
-    series: [
-      {},
-      { label: seriesLabel, stroke: seriesColor, width: 2, fill: seriesFill },
-      { label: 'S&P 500', stroke: '#8899aa', width: 1, dash: [4, 3] },
-    ],
-  };
+  const innerW = CHART_W - CHART_PAD.l - CHART_PAD.r;
+  const innerH = CHART_H - CHART_PAD.t - CHART_PAD.b;
 
-  uplotInst = new uPlot(opts, [ts, line1Pct, bmPct], container);
-  updateLegend();
+  const X = t => CHART_PAD.l + (innerW * (t - xMin) / (xMax - xMin || 1));
+  const Y = v => CHART_PAD.t + (innerH * (1 - (v - yMin) / (yMax - yMin || 1)));
+
+  // Defs
+  const defs = makeEl('defs');
+  defs.innerHTML = `
+    <linearGradient id="atArea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8AA4FF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#8AA4FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="atLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8AA4FF"/>
+      <stop offset="100%" stop-color="#D6BD8A"/>
+    </linearGradient>
+    <linearGradient id="atActualArea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D6BD8A" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#D6BD8A" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="atActualLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D6BD8A"/>
+      <stop offset="100%" stop-color="#8AA4FF"/>
+    </linearGradient>
+  `;
+  svg.appendChild(defs);
+
+  // Gridlines: nice ticks (find ~2-3 round values between yMin and yMax)
+  const gridVals = niceTicks(yMin, yMax, 3);
+  gridVals.forEach(v => {
+    const y = Y(v);
+    svg.appendChild(makeEl('line', {
+      x1: CHART_PAD.l, x2: CHART_W - CHART_PAD.r, y1: y, y2: y,
+      stroke: 'rgba(238,242,246,0.08)', 'stroke-width': 0.5,
+    }));
+    const lbl = makeEl('text', {
+      x: CHART_PAD.l - 4, y: y + 3,
+      'text-anchor': 'end',
+      'font-family': 'JetBrains Mono, ui-monospace, monospace',
+      'font-size': '9',
+      fill: 'rgba(238,242,246,0.25)',
+    });
+    lbl.textContent = (v >= 0 ? '' : '') + v.toFixed(0) + '%';
+    svg.appendChild(lbl);
+  });
+
+  // X-axis labels (months every ~N samples)
+  const xLabels = pickXLabels(ts);
+  xLabels.forEach(({ t, label }) => {
+    const x = X(t);
+    const txt = makeEl('text', {
+      x, y: CHART_H - 6,
+      'text-anchor': 'middle',
+      'font-family': 'JetBrains Mono, ui-monospace, monospace',
+      'font-size': '9',
+      fill: 'rgba(238,242,246,0.25)',
+    });
+    txt.textContent = label;
+    svg.appendChild(txt);
+  });
+
+  // Points
+  const line1Pts = ts.map((t, i) => [X(t), Y(line1Pct[i])]);
+  const bmPts = ts.map((t, i) => [X(t), Y(bmPct[i])]);
+  const yBase = Y(yMin);
+
+  const areaId = chartView === 'live' ? 'url(#atActualArea)' : 'url(#atArea)';
+  const lineGrad = chartView === 'live' ? 'url(#atActualLine)' : 'url(#atLine)';
+
+  // Area
+  const area = makeEl('path', {
+    d: areaFromPoints(line1Pts, yBase),
+    fill: areaId,
+    opacity: '0',
+  });
+  svg.appendChild(area);
+
+  // Bench line (dashed)
+  const benchPath = makeEl('path', {
+    d: pathFromPoints(bmPts),
+    fill: 'none',
+    stroke: 'rgba(238,242,246,0.25)',
+    'stroke-width': '1.4',
+    'stroke-dasharray': '3 4',
+    'stroke-linecap': 'round',
+  });
+  svg.appendChild(benchPath);
+
+  // Strategy line (gradient)
+  const stratPath = makeEl('path', {
+    d: pathFromPoints(line1Pts),
+    fill: 'none',
+    stroke: lineGrad,
+    'stroke-width': '2.2',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+  });
+  svg.appendChild(stratPath);
+
+  // Endpoint glow + dot + core
+  const end = line1Pts[line1Pts.length - 1];
+  const glow = makeEl('circle', { cx: end[0], cy: end[1], r: 10, fill: '#D6BD8A', opacity: '0' });
+  const dot  = makeEl('circle', { cx: end[0], cy: end[1], r: 4,  fill: '#D6BD8A', opacity: '0' });
+  const core = makeEl('circle', { cx: end[0], cy: end[1], r: 2,  fill: '#FFFFFF', opacity: '0' });
+  svg.appendChild(glow);
+  svg.appendChild(dot);
+  svg.appendChild(core);
+
+  // Animations
+  if (prefersReduced) {
+    area.setAttribute('opacity', '1');
+    glow.setAttribute('opacity', '0.22');
+    dot.setAttribute('opacity', '1');
+    core.setAttribute('opacity', '1');
+  } else {
+    // Path draw via dash-offset
+    const benchLen = getPathLen(benchPath);
+    benchPath.style.strokeDasharray = `${benchLen}`;
+    benchPath.style.strokeDashoffset = `${benchLen}`;
+    benchPath.style.transition = `stroke-dashoffset 1400ms cubic-bezier(.2,.7,.3,1) 250ms`;
+
+    const stratLen = getPathLen(stratPath);
+    stratPath.style.strokeDasharray = `${stratLen}`;
+    stratPath.style.strokeDashoffset = `${stratLen}`;
+    stratPath.style.transition = `stroke-dashoffset 1600ms cubic-bezier(.2,.7,.3,1) 400ms`;
+
+    area.style.transition = 'opacity 800ms cubic-bezier(.2,.7,.3,1) 500ms';
+    glow.style.transition = 'opacity 500ms cubic-bezier(.2,.7,.3,1) 1900ms';
+    dot.style.transition  = 'opacity 500ms cubic-bezier(.2,.7,.3,1) 1900ms';
+    core.style.transition = 'opacity 500ms cubic-bezier(.2,.7,.3,1) 1900ms';
+
+    requestAnimationFrame(() => {
+      benchPath.style.strokeDashoffset = '0';
+      stratPath.style.strokeDashoffset = '0';
+      area.setAttribute('opacity', '1');
+      glow.setAttribute('opacity', '0.22');
+      dot.setAttribute('opacity', '1');
+      core.setAttribute('opacity', '1');
+    });
+  }
+
+  // Legend values (trailing returns)
+  const lastStrat = line1Pct[line1Pct.length - 1];
+  const lastBench = bmPct[bmPct.length - 1];
+  const elS = $('legend-strategy-val');
+  const elB = $('legend-bench-val');
+  elS.textContent = (lastStrat >= 0 ? ' +' : ' ') + lastStrat.toFixed(1) + '%';
+  elS.style.color = lastStrat >= 0 ? 'var(--pos)' : 'var(--neg)';
+  elB.textContent = (lastBench >= 0 ? ' +' : ' ') + lastBench.toFixed(1) + '%';
+  elB.style.color = lastBench >= 0 ? 'var(--pos)' : 'var(--neg)';
+  $('legend-strategy-label').textContent = seriesLabel;
 }
 
-const resizeObs = new ResizeObserver(function(entries) {
-  if (uplotInst && entries[0]) {
-    var w = entries[0].contentRect.width;
-    if (w > 0) uplotInst.setSize({ width: w, height: 180 });
+function getPathLen(pathEl) {
+  try { return pathEl.getTotalLength() || 0; } catch (e) { return 0; }
+}
+
+function niceTicks(min, max, count) {
+  const range = max - min;
+  if (range <= 0) return [min];
+  const rough = range / (count - 1);
+  const pow10 = Math.pow(10, Math.floor(Math.log10(rough)));
+  const candidates = [1, 2, 5, 10].map(k => k * pow10);
+  let step = candidates[0];
+  for (const c of candidates) if (Math.abs(c - rough) < Math.abs(step - rough)) step = c;
+  const start = Math.ceil(min / step) * step;
+  const out = [];
+  for (let v = start; v <= max; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  // Always include 0 if in range
+  if (min < 0 && max > 0 && !out.includes(0)) out.push(0);
+  return out;
+}
+
+function pickXLabels(ts) {
+  const n = ts.length;
+  if (n < 2) return [];
+  const targetCount = 4;
+  const step = Math.floor(n / targetCount);
+  const out = [];
+  for (let i = 0; i < targetCount; i++) {
+    const idx = Math.min(n - 1, i * step + Math.floor(step / 2));
+    const d = new Date(ts[idx] * 1000);
+    const label = d.toLocaleString('en-US', { month: 'short' }) + " " + String(d.getFullYear()).slice(-2);
+    out.push({ t: ts[idx], label });
   }
-});
+  return out;
+}
 
-// Year toggle buttons
-document.querySelectorAll('.yr-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    document.querySelectorAll('.yr-btn').forEach(function(b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-    chartYears = parseInt(btn.dataset.years);
-    renderChart();
-  });
+// Toggles
+$('yr-toggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-years]');
+  if (!btn) return;
+  $('yr-toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartYears = parseInt(btn.dataset.years, 10);
+  renderChart();
 });
-
-// View toggle buttons (Backtest / Live)
-document.querySelectorAll('.view-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-    chartView = btn.dataset.view;
-    // In live view, year toggles don't apply (show all available data)
-    var yearsToggle = document.getElementById('years-toggle');
-    yearsToggle.style.opacity = chartView === 'live' ? '0.3' : '1';
-    yearsToggle.style.pointerEvents = chartView === 'live' ? 'none' : 'auto';
-    renderChart();
-  });
+$('view-toggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  $('view-toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartView = btn.dataset.view;
+  $('yr-toggle').style.opacity = chartView === 'live' ? '0.3' : '1';
+  $('yr-toggle').style.pointerEvents = chartView === 'live' ? 'none' : 'auto';
+  renderChart();
 });
 
 async function loadEquityCurve() {
-  // Pick the URL from the active strategy. Falls back to default SP500 curve
-  // if the per-strategy URL isn't set.
   let objectName = DEFAULT_EQUITY_OBJECT;
   if (currentState && currentStrategy) {
     const strat = (currentState.strategies || {})[currentStrategy];
     if (strat && strat.equity_curve_object) objectName = strat.equity_curve_object;
   }
-  const url = SUPABASE_BASE + objectName;
   try {
-    var resp = await fetch(url, { cache: 'no-store' });
+    const resp = await fetch(SUPABASE_BASE + objectName, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     eqData = await resp.json();
     if (!eqData.ts || eqData.ts.length < 2) throw new Error('No data');
-    document.getElementById('chart-card').style.display = '';
+    $('chart-card').style.display = '';
 
-    // Live (actual equity) toggle: only show for SP500 strategy currently —
-    // QQQ live equity tracking isn't wired yet, so the Live button stays
-    // hidden when on the QQQ tab.
-    const liveBtn = document.getElementById('live-btn');
+    const liveBtn = $('live-btn');
     if (eqData.actual_ts && eqData.actual_ts.length >= 2 &&
         currentStrategy === 'SP500_12_Stage_Strategy') {
       liveBtn.style.display = '';
     } else {
       liveBtn.style.display = 'none';
-      // If we'd been viewing the live chart, fall back to backtest
       if (chartView === 'live') {
         chartView = 'backtest';
-        document.querySelectorAll('.view-btn').forEach(function(b) {
+        $('view-toggle').querySelectorAll('button').forEach(b => {
           b.classList.toggle('active', b.dataset.view === 'backtest');
         });
       }
     }
-
     renderChart();
-    resizeObs.observe(document.getElementById('chart-container'));
   } catch (err) {
-    console.warn('Equity curve load failed for ' + objectName + ':', err.message);
-    // Hide chart card if we can't load any curve.
-    document.getElementById('chart-card').style.display = 'none';
+    console.warn('Equity curve load failed:', err.message);
+    $('chart-card').style.display = 'none';
   }
 }
 
-// Initial chart load is triggered by renderForStrategy() inside load() above.
-// If the page loaded with a deep-linked URL hash and load() already finished,
-// trigger one more pass now that this script block has defined loadEquityCurve.
+// Resize
+let resizeT;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(renderChart, 150);
+});
+
+// If state already loaded, kick chart now
 if (currentState && currentStrategy) loadEquityCurve();
 </script>
 </body>
