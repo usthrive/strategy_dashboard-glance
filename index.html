@@ -100,6 +100,16 @@
       text-transform: uppercase;
       color: var(--mute);
     }
+    .overline-asof {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-left: 6px;
+    }
+    .overline-asof::before { content: "· "; }
 
     .label {
       font-size: 10px;
@@ -694,7 +704,7 @@
       </div>
       <div class="header-right">
         <div class="header-date" id="header-date">—</div>
-        <div class="live-ind"><span class="live-dot"></span>live</div>
+        <div class="live-ind"><span class="live-dot"></span>daily</div>
       </div>
     </div>
 
@@ -751,7 +761,7 @@
 
       <!-- Today -->
       <div class="glass section-card fade-in" style="--fi-delay: 380ms;">
-        <div class="overline">Today</div>
+        <div class="overline">Today <span class="overline-asof" id="today-asof"></span></div>
         <div class="today-grid">
           <div class="metric-cell">
             <div class="metric-num tnum" id="m-gspc">—</div>
@@ -852,7 +862,7 @@
 
       <!-- Accounts -->
       <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 920ms; display: none;">
-        <span class="overline">Accounts</span>
+        <span class="overline">Accounts <span class="overline-asof" id="accounts-asof"></span></span>
         <div class="accounts-list" id="accounts-list"></div>
       </div>
     </div>
@@ -1251,7 +1261,10 @@ async function load() {
     currentState = s;
 
     const asOf = s.as_of_date || 'unknown';
-    $('header-date').textContent = asOf;
+    $('header-date').textContent = `close ${asOf}`;
+    const asOfText = asOf && asOf !== 'unknown' ? `close ${asOf}` : '';
+    const td = $('today-asof');    if (td) td.textContent = asOfText;
+    const ac = $('accounts-asof'); if (ac) ac.textContent = asOfText;
 
     if (isStale(asOf)) {
       const b = $('stale-banner');
@@ -1293,7 +1306,7 @@ async function load() {
     else if (action === 'ADJUST') displayAction = 'ADJUST';
     else displayAction = action.toUpperCase().replace(/_/g, ' ');
 
-    $('signal-meta').textContent = `POSITION · ${asOf}`;
+    $('signal-meta').textContent = `POSITION · AS OF CLOSE ${asOf}`;
     // Terminal readout: spaces → underscores, trailing _ is the blinking caret.
     $('signal-label').textContent = displayAction.replace(/ /g, '_');
     $('signal-leverage').textContent = `${lev}×`;
@@ -1324,7 +1337,10 @@ async function load() {
     // so QQQ vs SPX uses each view's own pnl/headline.
 
     // Footer
-    $('footer').textContent = s.generated_at_utc ? `Generated ${s.generated_at_utc}` : '';
+    $('footer').innerHTML = [
+      `All performance values reflect market close of ${esc(asOf)}.`,
+      s.generated_at_utc ? `Generated ${esc(s.generated_at_utc)}` : ''
+    ].filter(Boolean).join(' · ');
 
   } catch (err) {
     $('signal-label').textContent = 'Error';
@@ -1413,7 +1429,11 @@ function renderForStrategy(s, strategyKey) {
     pnl_state: strat.pnl_state || s.pnl_state,
     headline: { gspc: h },
   });
-  const phase = (viewState.cycle && viewState.cycle.zone) ? viewState.cycle : deriveCyclePhase(viewState);
+  // Always derive from strategy state so the wave never disagrees with the hero.
+  // The backend's s.cycle block (real K42 Kitchin phase) is ignored here — it
+  // can say "contraction" while the strategy is still Long Hold, which confuses
+  // public readers. Keep the two in sync by using a single source of truth.
+  const phase = deriveCyclePhase(viewState);
   $('stage-name').textContent = phase.label || '—';
   renderCycleWave(phase.position ?? 0, phase.zone);
   renderCommentary(viewState, phase);
