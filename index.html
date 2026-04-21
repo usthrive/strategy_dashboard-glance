@@ -92,7 +92,7 @@
     <div class="card grid grid-3">
       <div class="metric">
         <div id="gspc" class="metric-value">—</div>
-        <div class="metric-label">S&amp;P 500</div>
+        <div class="metric-label" id="gspc-label">S&amp;P 500</div>
       </div>
       <div class="metric">
         <div id="trade-pnl" class="metric-value">—</div>
@@ -108,7 +108,7 @@
       </div>
       <div class="metric">
         <div id="spy-1d" class="metric-value">—</div>
-        <div class="metric-label">S&amp;P 500 1D</div>
+        <div class="metric-label" id="spy-1d-label">S&amp;P 500 1D</div>
       </div>
       <div class="metric">
         <div id="dd" class="metric-value">—</div>
@@ -257,50 +257,12 @@ async function load() {
     document.getElementById('leverage').textContent = `${lev}× leverage`;
     document.getElementById('trigger').textContent = trigger;
 
-    // Market + PnL metrics (shared — derived from SP500 strategy state).
-    // QQQ-specific PnL (YTD on QQQ-execution etc.) is a future enhancement;
-    // for now both views show the SP500 strategy's portfolio metrics, which
-    // accurately reflect the SHARED signals driving both.
-    const ms = s.market_state || {};
-    const ps = s.pnl_state || {};
-    const cs = s.catastrophe_stops || {};
-    const eq_stop = cs.equity_stop || {};
-
-    document.getElementById('gspc').textContent = fmt(ms.gspc_close, 1);
-
-    const tradePnl = ps.unrealized_return_pct;
-    const tradePnlEl = document.getElementById('trade-pnl');
-    tradePnlEl.textContent = fmtPct(tradePnl);
-    if (tradePnl != null) tradePnlEl.style.color = tradePnl >= 0 ? 'var(--green)' : 'var(--red)';
-
-    const ytdPct = ps.ytd_return_pct;
-    const ytdEl = document.getElementById('ytd');
-    ytdEl.textContent = fmtPct(ytdPct);
-    if (ytdPct != null) ytdEl.style.color = ytdPct >= 0 ? 'var(--green)' : 'var(--red)';
-
-    const stratDay = ps.yesterday_strategy_return_pct;
-    const stratDayEl = document.getElementById('strat-1d');
-    stratDayEl.textContent = fmtPct(stratDay);
-    if (stratDay != null) stratDayEl.style.color = stratDay >= 0 ? 'var(--green)' : 'var(--red)';
-
-    const spyDay = ps.yesterday_spy_return_pct;
-    const spyDayEl = document.getElementById('spy-1d');
-    spyDayEl.textContent = fmtPct(spyDay);
-    if (spyDay != null) spyDayEl.style.color = spyDay >= 0 ? 'var(--green)' : 'var(--red)';
-
-    const ddPct = eq_stop.intra_dd_pct;
-    const ddEl = document.getElementById('dd');
-    ddEl.textContent = fmtPct(ddPct);
-    if (ddPct != null) {
-      if (ddPct > 10) ddEl.className = 'metric-value dd-danger';
-      else if (ddPct > 5) ddEl.className = 'metric-value dd-warn';
-    }
-
-    // Bars in trade (shared)
+    // Bars in trade (shared — same for all strategies, comes from leverage_state)
     const ls = s.leverage_state || {};
     const hybrid = ls.tla_tle_hybrid || {};
     document.getElementById('bars-in-trade').textContent =
       hybrid.bars_since_entry != null ? hybrid.bars_since_entry : '—';
+    // Market + PnL metrics are now per-strategy — see renderForStrategy().
 
     // Commentary + footer (shared)
     const comm = s.simple_commentary || s.commentary || 'No commentary available.';
@@ -427,6 +389,61 @@ function renderForStrategy(s, strategyKey) {
   document.getElementById('cagr-label').textContent = `CAGR (${benchSym})`;
   document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
   document.getElementById('maxdd').textContent = fmtPct(h.maxdd);
+
+  // ── Market + PnL metrics — per-strategy overlay ─────────────────
+  // SP500 view falls back to top-level state.market_state / state.pnl_state
+  // (existing default). QQQ view uses strat.market_state / strat.pnl_state
+  // computed from state_timeseries_qqq.parquet so the metric box reflects
+  // QQQ-execution numbers when QQQ is selected.
+  const ms = strat.market_state || s.market_state || {};
+  const ps = strat.pnl_state || s.pnl_state || {};
+  const cs = s.catastrophe_stops || {};
+  const eq_stop = cs.equity_stop || {};
+
+  // Benchmark close + label (first metric tile)
+  const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
+  const benchLabel = ms.bench_label || (strat.benchmark && strat.benchmark.label) || 'S&P 500';
+  document.getElementById('gspc').textContent = fmt(benchClose, 1);
+  document.getElementById('gspc-label').textContent = benchLabel;
+
+  // Trade P&L (unrealized return)
+  const tradePnl = ps.unrealized_return_pct;
+  const tradePnlEl = document.getElementById('trade-pnl');
+  tradePnlEl.textContent = fmtPct(tradePnl);
+  tradePnlEl.style.color = tradePnl != null ? (tradePnl >= 0 ? 'var(--green)' : 'var(--red)') : '';
+
+  // YTD return
+  const ytdPct = ps.ytd_return_pct;
+  const ytdEl = document.getElementById('ytd');
+  ytdEl.textContent = fmtPct(ytdPct);
+  ytdEl.style.color = ytdPct != null ? (ytdPct >= 0 ? 'var(--green)' : 'var(--red)') : '';
+
+  // Strategy 1D return
+  const stratDay = ps.yesterday_strategy_return_pct;
+  const stratDayEl = document.getElementById('strat-1d');
+  stratDayEl.textContent = fmtPct(stratDay);
+  stratDayEl.style.color = stratDay != null ? (stratDay >= 0 ? 'var(--green)' : 'var(--red)') : '';
+
+  // Benchmark 1D return — pnl uses 'yesterday_bench_return_pct' for QQQ,
+  // legacy 'yesterday_spy_return_pct' for SP500 top-level. Try both.
+  const benchDay = ps.yesterday_bench_return_pct != null
+    ? ps.yesterday_bench_return_pct
+    : ps.yesterday_spy_return_pct;
+  const benchDayEl = document.getElementById('spy-1d');
+  benchDayEl.textContent = fmtPct(benchDay);
+  benchDayEl.style.color = benchDay != null ? (benchDay >= 0 ? 'var(--green)' : 'var(--red)') : '';
+  document.getElementById('spy-1d-label').textContent = benchLabel + ' 1D';
+
+  // Intra-trade DD — for QQQ comes from pnl_state.intra_trade_dd_pct;
+  // for SP500 stays in catastrophe_stops.equity_stop.intra_dd_pct.
+  const ddPct = (ps.intra_trade_dd_pct != null) ? ps.intra_trade_dd_pct : eq_stop.intra_dd_pct;
+  const ddEl = document.getElementById('dd');
+  ddEl.textContent = fmtPct(ddPct);
+  ddEl.className = 'metric-value';
+  if (ddPct != null) {
+    if (ddPct > 10) ddEl.className = 'metric-value dd-danger';
+    else if (ddPct > 5) ddEl.className = 'metric-value dd-warn';
+  }
 
   // Trading accounts (per-strategy split)
   const ta = strat.trading_accounts || s.trading_accounts || {};
