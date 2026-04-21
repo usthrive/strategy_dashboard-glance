@@ -908,6 +908,37 @@ function toTitleCase(str) {
   return String(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Display-friendly account name:
+//   - drops "live" / "paper" tokens (already shown by the status badge)
+//   - renames "ibkr" → "IB"
+//   - uppercases common ticker tokens (QQQ, SPY, SPX, NDX, etc.)
+//   - if no ticker token and positions[0] has a symbol, appends it
+//   - title-cases the rest
+// Examples:
+//   ibkr_live + [SPY]        → "IB SPY"
+//   ibkr_paper_qqq + [QQQ]   → "IB QQQ"  (qqq already in name)
+//   alpaca + [SPY]           → "Alpaca SPY"
+//   alpaca + []              → "Alpaca"
+function formatAccountName(name, positions) {
+  const TICKERS = new Set([
+    'qqq','spy','spx','ndx','iwm','dia','tlt','gld','uso','efa','vti',
+    'upro','tqqq','sso','sqqq',
+  ]);
+  const out = [];
+  let hasTicker = false;
+  for (const t of String(name).toLowerCase().split('_')) {
+    if (!t || t === 'live' || t === 'paper') continue;
+    if (t === 'ibkr') { out.push('IB'); continue; }
+    if (TICKERS.has(t)) { out.push(t.toUpperCase()); hasTicker = true; continue; }
+    out.push(t.charAt(0).toUpperCase() + t.slice(1));
+  }
+  if (!hasTicker && Array.isArray(positions) && positions.length > 0) {
+    const sym = positions[0] && positions[0].symbol;
+    if (sym) out.push(String(sym).toUpperCase());
+  }
+  return out.join(' ');
+}
+
 function parseFormatted(str) {
   // Returns { value, prefix, suffix, decimals, thousands } from a formatted string
   const m = String(str).match(/^([^\d.\-]*)(-?[\d,]+\.?\d*)(.*)$/);
@@ -1016,8 +1047,10 @@ function deriveCyclePhase(s) {
   if (dd > 12) return { position: 0.70, zone: 'distribution', label: 'Distribution · Long' };
   if (dd > 7)  return { position: 0.62, zone: 'distribution', label: 'Distribution · Long' };
   if (dd > 2)  return { position: 0.54, zone: 'distribution', label: 'Distribution · Long' };
-  if (dd > 0.5) return { position: 0.50, zone: 'expansion',
-                         label: lev >= 3 ? 'Expansion · Burst · Cresting' : 'Expansion · Long · Cresting' };
+  // Cresting threshold at 1% (not 0.5%) so SPX and QQQ views don't diverge
+  // from sub-percent DD differences caused by their different volatilities.
+  if (dd > 1) return { position: 0.50, zone: 'expansion',
+                       label: lev >= 3 ? 'Expansion · Burst · Cresting' : 'Expansion · Long · Cresting' };
   if (lev >= 3) return { position: 0.45, zone: 'expansion', label: 'Expansion · Burst' };
   return { position: 0.35, zone: 'expansion', label: 'Expansion · Long' };
 }
@@ -1366,21 +1399,23 @@ function renderForStrategy(s, strategyKey) {
     if (hKeys.length > 0) h = strat.headline[hKeys[0]] || {};
   }
   if (!h.cagr && s.headline && s.headline.gspc) h = s.headline.gspc;
-  const benchSym = (strat.benchmark && strat.benchmark.symbol) || 'GSPC';
 
-  animateCount($('s-cagr'), h.cagr != null ? fmtPct(h.cagr, 1, false) : '—', 1100, 720);
-  $('s-cagr-label').textContent = `CAGR (${benchSym})`;
-  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 3) : '—', 1100, 770);
-  animateCount($('s-maxdd'), h.maxdd != null ? fmtPct(h.maxdd, 1, false) : '—', 1100, 820);
-
-  // Market / PnL
+  // Market / PnL (load early so benchLabel is available for the lifetime
+  // CAGR label below — both sections share the same label).
   const ms = strat.market_state || s.market_state || {};
   const ps = strat.pnl_state || s.pnl_state || {};
   const cs = s.catastrophe_stops || {};
   const eq_stop = cs.equity_stop || {};
-
-  const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
+  // Prefer the human-readable label ("S&P 500", "Nasdaq-100") over the raw
+  // ticker symbol ("SPY", "GSPC"). Lifetime CAGR is the backtest against
+  // the index, not the tradable ETF, so "S&P 500" is more accurate.
   const benchLabel = ms.bench_label || (strat.benchmark && strat.benchmark.label) || 'S&P 500';
+  const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
+
+  animateCount($('s-cagr'), h.cagr != null ? fmtPct(h.cagr, 1, false) : '—', 1100, 720);
+  $('s-cagr-label').textContent = `CAGR (${benchLabel})`;
+  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 3) : '—', 1100, 770);
+  animateCount($('s-maxdd'), h.maxdd != null ? fmtPct(h.maxdd, 1, false) : '—', 1100, 820);
   animateCount($('m-gspc'), benchClose != null ? fmtNum(benchClose, 1) : '—', 1100, 430);
   $('m-gspc-label').textContent = benchLabel;
 
@@ -1480,7 +1515,7 @@ function buildAccountCard(name, data, badge, idx) {
   card.className = 'glass account-card fade-in';
   card.style.setProperty('--fi-delay', (880 + idx * 100) + 'ms');
 
-  const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const displayName = formatAccountName(name, data && data.positions);
   const acctId = data.account_id_masked || '';
 
   // Row 1: badge + broker + masked + value
