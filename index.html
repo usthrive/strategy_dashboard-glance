@@ -301,44 +301,50 @@
     }
     .frame-col {
       position: relative;
-      border: 1px solid rgba(255,255,255,0.07);
+      border: 0;
       border-radius: 12px;
-      background: rgba(255,255,255,0.015);
+      background: rgba(255,255,255,0.025);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 4px 12px;
+      overflow: hidden;
       transition: background 220ms var(--ease),
-                  border-color 220ms var(--ease),
                   box-shadow 220ms var(--ease);
     }
     .frame-label {
-      position: absolute;
-      bottom: 10px;
-      left: 0; right: 0;
       text-align: center;
-      font-size: 9px;
+      font-size: 8.5px;
       font-weight: 500;
-      letter-spacing: 1px;
+      letter-spacing: 0.6px;
       text-transform: uppercase;
       color: var(--faint);
       transition: color 220ms var(--ease);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    /* idle zone shading — gives distinct feel without borders */
+    .frame-col[data-zone="accumulation"] { background: rgba(126,216,168,0.035); }
+    .frame-col[data-zone="expansion"]    { background: rgba(126,216,168,0.055); }
+    .frame-col[data-zone="distribution"] { background: rgba(214,189,138,0.055); }
+    .frame-col[data-zone="contraction"]  { background: rgba(232,144,136,0.055); }
+
     .frame-col.active[data-zone="accumulation"],
     .frame-col.active[data-zone="expansion"] {
-      background: rgba(126,216,168,0.09);
-      border-color: rgba(126,216,168,0.50);
-      box-shadow: 0 0 16px rgba(126,216,168,0.18);
+      background: rgba(126,216,168,0.17);
+      box-shadow: 0 0 20px rgba(126,216,168,0.22);
     }
     .frame-col.active[data-zone="accumulation"] .frame-label,
     .frame-col.active[data-zone="expansion"] .frame-label { color: var(--pos); }
     .frame-col.active[data-zone="distribution"] {
-      background: rgba(214,189,138,0.10);
-      border-color: rgba(214,189,138,0.55);
-      box-shadow: 0 0 16px rgba(214,189,138,0.20);
+      background: rgba(214,189,138,0.20);
+      box-shadow: 0 0 20px rgba(214,189,138,0.24);
     }
     .frame-col.active[data-zone="distribution"] .frame-label { color: var(--gold); }
     .frame-col.active[data-zone="contraction"] {
-      background: rgba(232,144,136,0.10);
-      border-color: rgba(232,144,136,0.55);
-      box-shadow: 0 0 16px rgba(232,144,136,0.20);
+      background: rgba(232,144,136,0.20);
+      box-shadow: 0 0 20px rgba(232,144,136,0.24);
     }
     .frame-col.active[data-zone="contraction"] .frame-label { color: var(--neg); }
 
@@ -358,6 +364,63 @@
       font-size: 11px;
       line-height: 1.55;
       color: var(--mute);
+    }
+
+    /* Commentary card — short summary with expandable detail */
+    .commentary-card { padding: 20px 22px 20px; }
+    .commentary-card .overline { margin-bottom: 12px; }
+    .commentary-short {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--ink);
+      margin: 0;
+    }
+    .commentary-details { margin-top: 4px; }
+    .commentary-details > summary {
+      list-style: none;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 500;
+      padding: 10px 0 4px;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .commentary-details > summary::-webkit-details-marker { display: none; }
+    .commentary-details > summary::after {
+      content: '▾';
+      font-size: 9px;
+      transition: transform 200ms var(--ease);
+    }
+    .commentary-details[open] > summary::after { transform: rotate(180deg); }
+
+    .commentary-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding-top: 14px;
+      margin-top: 2px;
+      border-top: 1px solid var(--glass-edge);
+    }
+    .commentary-p {
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--mute);
+      margin: 0;
+    }
+    .commentary-p .section-title {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 4px;
     }
 
     /* ─── Today grid (3 cols) ────────────────────────────────────── */
@@ -482,6 +545,14 @@
       text-transform: uppercase;
       color: var(--mute);
       margin-top: 4px;
+    }
+    .stats-note {
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--mute);
+      margin: 16px 0 0;
+      padding-top: 14px;
+      border-top: 1px solid var(--glass-edge);
     }
 
     /* ─── Accounts ───────────────────────────────────────────────── */
@@ -666,13 +737,9 @@
                 <stop offset="55%" stop-color="#D6BD8A"/>
                 <stop offset="100%" stop-color="#E89088"/>
               </linearGradient>
-              <linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="rgba(214,189,138,0.10)"/>
-                <stop offset="100%" stop-color="rgba(214,189,138,0.00)"/>
-              </linearGradient>
             </defs>
-            <line x1="0" y1="48" x2="400" y2="48" stroke="rgba(255,255,255,0.05)" stroke-width="0.5" stroke-dasharray="3 4"/>
-            <path id="wave-area" d="" fill="url(#waveFill)" opacity="0"/>
+            <line x1="8" y1="48" x2="392" y2="48"
+                  stroke="rgba(255,255,255,0.18)" stroke-width="0.5" stroke-dasharray="3 4"/>
             <path id="wave-path" d="" stroke="url(#waveGrad)" stroke-width="2.5" fill="none"
                   stroke-linecap="round" stroke-linejoin="round"/>
             <circle id="wave-dot-glow" cx="0" cy="48" r="11" fill="#D6BD8A" opacity="0" class="wave-dot-glow"/>
@@ -680,7 +747,6 @@
             <circle id="wave-dot-core" cx="0" cy="48" r="1.5" fill="#FFFFFF" opacity="0" class="wave-dot-core"/>
           </svg>
         </div>
-        <div class="cycle-summary" id="cycle-summary">Loading…</div>
       </div>
 
       <!-- Today -->
@@ -714,8 +780,18 @@
         </div>
       </div>
 
+      <!-- Commentary (after numbers, before chart) -->
+      <div class="glass commentary-card fade-in" style="--fi-delay: 500ms;">
+        <div class="overline">What's Happening</div>
+        <p class="commentary-short" id="commentary-short">Loading…</p>
+        <details class="commentary-details" id="commentary-details">
+          <summary>Read more</summary>
+          <div class="commentary-body" id="commentary-body"></div>
+        </details>
+      </div>
+
       <!-- Chart -->
-      <div class="glass chart-card fade-in" id="chart-card" style="--fi-delay: 560ms; display: none;">
+      <div class="glass chart-card fade-in" id="chart-card" style="--fi-delay: 640ms; display: none;">
         <div class="chart-head-row">
           <div class="chart-title-block">
             <span class="overline">Backtest</span>
@@ -751,7 +827,7 @@
       </div>
 
       <!-- Lifetime stats -->
-      <div class="glass section-card fade-in" style="--fi-delay: 720ms;">
+      <div class="glass section-card fade-in" style="--fi-delay: 780ms;">
         <div class="overline">Lifetime stats</div>
         <div class="stats-grid">
           <div class="stat-cell">
@@ -771,10 +847,11 @@
             <div class="stat-label">Bars in trade</div>
           </div>
         </div>
+        <p class="stats-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
       </div>
 
       <!-- Accounts -->
-      <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 880ms; display: none;">
+      <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 920ms; display: none;">
         <span class="overline">Accounts</span>
         <div class="accounts-list" id="accounts-list"></div>
       </div>
@@ -935,6 +1012,103 @@ function deriveCyclePhase(s) {
   return { position: 0.35, zone: 'expansion', label: 'Expansion · Long' };
 }
 
+// ─── Short-form commentary (default view, 2-3 sentences) ────────
+// Captures the essence: phase, exposure, DD, YTD, and the system's posture.
+function composeShortCommentary(s, phase) {
+  const lev = Number(s.leverage || 0);
+  const action = (s.action && s.action.action) || '';
+  const ddRaw = (s.pnl_state && s.pnl_state.intra_trade_dd_pct) ??
+                (s.catastrophe_stops && s.catastrophe_stops.equity_stop && s.catastrophe_stops.equity_stop.intra_dd_pct);
+  const dd = (ddRaw != null && isFinite(ddRaw)) ? Number(ddRaw) : 0;
+  const ytd = Number((s.pnl_state && s.pnl_state.ytd_return_pct) || 0);
+  const ytdStr = (ytd >= 0 ? '+' : '') + ytd.toFixed(1) + '%';
+  const ddStr = dd.toFixed(1) + '%';
+
+  if (phase.zone === 'expansion') {
+    const exp = lev >= 3 ? 'standard long with burst exposure engaged' : 'standard long exposure';
+    const ddPart = dd < 0.5 ? 'at peak' : `${ddStr} off peak`;
+    return `Market in expansion — price above long-term support, momentum positive. Strategy holds ${exp}, ${ddPart}, ${ytdStr} year-to-date. No exit conditions close to firing.`;
+  }
+  if (phase.zone === 'distribution') {
+    return `Market pulling back from recent highs. Strategy still long, absorbing the pullback at ${ddStr} drawdown — normal territory for this approach. YTD ${ytdStr}. Watching for a deeper break before acting.`;
+  }
+  if (phase.zone === 'contraction') {
+    return `Market in contraction — strategy moved to cash after exit signals fired. YTD ${ytdStr}. Waiting for confirmed trend + momentum to re-align before re-entering.`;
+  }
+  return `Market showing accumulation signs — bottoming phase. Strategy defensive until a fresh entry signal fires.`;
+}
+
+// ─── Detailed commentary (4 short paragraphs behind "Read more") ──
+function composeDetailedCommentary(s, phase) {
+  const lev = Number(s.leverage || 0);
+  const action = (s.action && s.action.action) || '';
+  const ddRaw = (s.pnl_state && s.pnl_state.intra_trade_dd_pct) ??
+                (s.catastrophe_stops && s.catastrophe_stops.equity_stop && s.catastrophe_stops.equity_stop.intra_dd_pct);
+  const dd = (ddRaw != null && isFinite(ddRaw)) ? Number(ddRaw) : 0;
+  const ytd = Number((s.pnl_state && s.pnl_state.ytd_return_pct) || 0);
+  const bars = Number((s.leverage_state && s.leverage_state.tla_tle_hybrid && s.leverage_state.tla_tle_hybrid.bars_since_entry) || 0);
+
+  const ddStr = dd.toFixed(1) + '%';
+  const atPeak = dd < 0.5;
+
+  const paras = [];
+
+  // ── P1: Where we are ─────────────────────────────────
+  let p1;
+  if (phase.zone === 'expansion') {
+    p1 = `Price is above long-term support and momentum is positive — constructive backdrop, participate fully. `;
+    if (lev >= 3) p1 += `Burst exposure is engaged. `;
+    else p1 += `Standard 1× long exposure is in place. `;
+    p1 += atPeak ? `Position at high-water mark.` : `Drawdown from peak: ${ddStr}.`;
+  } else if (phase.zone === 'distribution') {
+    p1 = `Price is pulling back from a recent high. Strategy still long, absorbing the move at ${ddStr} drawdown — by design, pullbacks are held through rather than traded.`;
+  } else if (phase.zone === 'contraction') {
+    p1 = `Strategy is in cash after exit signals fired. Cash periods are typically weeks to a few months while conditions re-confirm — not an attempt to time the low.`;
+  } else {
+    p1 = `Market stabilizing after a decline. Strategy stays defensive until a confirmed entry signal fires.`;
+  }
+  paras.push(p1);
+
+  // ── P2: What the strategy is doing ───────────────────
+  let p2;
+  if (action === 'HOLD' && lev > 0) {
+    p2 = `Holding. Cutting on noise has historically cost more than sitting through pullbacks, so the system only moves when trend or momentum flips, or drawdown threatens the portfolio. Neither is close.`;
+    if (bars > 0) p2 += ` Trade has been active for ${bars} trading days.`;
+  } else if (action === 'HOLD' && lev === 0) {
+    p2 = `In cash and waiting. Won't chase bounces — re-entry requires confirmed trend and momentum both back in positive territory. Until then, no position risk.`;
+  } else if (action === 'BUY') {
+    p2 = `New entry signal fired today. Trend and momentum have aligned positively — this is the trigger the system waits in cash for.`;
+  } else if (action === 'SELL') {
+    p2 = `Exit signal fired today. Moving to cash to protect capital. Exits happen on trend breaks, not single rough days.`;
+  } else if (action === 'ADJUST') {
+    p2 = `Adjusting exposure today — leverage is scaling up or down based on shifted risk conditions.`;
+  } else {
+    p2 = `The system checks every day near the close and acts only when its rules require it.`;
+  }
+  paras.push(p2);
+
+  // ── P3: What could change the picture ────────────────
+  let p3;
+  if (lev > 0) {
+    p3 = `Watch for: a sustained break below long-wave trend anchors, a reversal in longer-horizon momentum, or a drawdown deep enough to trip catastrophe protection. None are close today — the system evaluates daily at the close and any fire updates this page before the next open.`;
+  } else {
+    p3 = `Watch for: confirmed re-alignment of trend and momentum. These triggers historically fire within weeks to a few months of a meaningful low — not at the exact bottom, and that's by design.`;
+  }
+  paras.push(p3);
+
+  return paras;
+}
+
+function renderCommentary(s, phase) {
+  $('commentary-short').textContent = composeShortCommentary(s, phase);
+  const sections = ["Where we are", "What the strategy is doing", "What could change this"];
+  const paras = composeDetailedCommentary(s, phase);
+  const body = $('commentary-body');
+  body.innerHTML = paras.map((p, i) =>
+    `<p class="commentary-p"><span class="section-title">${sections[i] || ''}</span>${esc(p)}</p>`
+  ).join('');
+}
+
 function composeCycleSummary(s, phase) {
   const lev = Number(s.leverage || 0);
   const ddRaw = (s.pnl_state && s.pnl_state.intra_trade_dd_pct) ??
@@ -986,17 +1160,6 @@ function buildWavePath(n = 80) {
   return d;
 }
 
-function buildWaveArea(n = 80) {
-  // Area under the wave — used as subtle fill tint above zero line
-  let d = `M 0,${WAVE_CENTER}`;
-  for (let i = 0; i <= n; i++) {
-    const [x, y] = wavePoint(i / n);
-    d += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
-  }
-  d += ` L ${WAVE_W},${WAVE_CENTER} Z`;
-  return d;
-}
-
 function zoneColor(zone) {
   if (zone === 'accumulation' || zone === 'expansion') return '#7ED8A8';
   if (zone === 'distribution') return '#D6BD8A';
@@ -1006,7 +1169,6 @@ function zoneColor(zone) {
 
 function renderCycleWave(position, zone) {
   const pathEl = document.getElementById('wave-path');
-  const areaEl = document.getElementById('wave-area');
   const dotGlow = document.getElementById('wave-dot-glow');
   const dot = document.getElementById('wave-dot');
   const core = document.getElementById('wave-dot-core');
@@ -1015,20 +1177,15 @@ function renderCycleWave(position, zone) {
   // Build path on first render only
   if (!waveRendered) {
     pathEl.setAttribute('d', buildWavePath(96));
-    areaEl.setAttribute('d', buildWaveArea(96));
 
     if (!prefersReduced) {
       const len = pathEl.getTotalLength ? pathEl.getTotalLength() : 1200;
       pathEl.style.strokeDasharray = `${len}`;
       pathEl.style.strokeDashoffset = `${len}`;
       pathEl.style.transition = 'stroke-dashoffset 1500ms cubic-bezier(.2,.7,.3,1) 400ms';
-      areaEl.style.transition = 'opacity 1000ms cubic-bezier(.2,.7,.3,1) 800ms';
       requestAnimationFrame(() => {
         pathEl.style.strokeDashoffset = '0';
-        areaEl.setAttribute('opacity', '1');
       });
-    } else {
-      areaEl.setAttribute('opacity', '1');
     }
     waveRendered = true;
   }
@@ -1163,24 +1320,16 @@ async function load() {
     const bars = hybrid.bars_since_entry;
     animateCount($('s-bars'), bars != null ? String(bars) : '—', 1100, 720);
 
-    // Cycle — prefer the backend-computed block; fall back to heuristic.
-    // Backend ships { position: 0-1, zone, label }. If absent, derive client-side.
-    const phase = (s.cycle && s.cycle.zone) ? s.cycle : deriveCyclePhase(s);
-    $('stage-name').textContent = phase.label || '—';
-    $('cycle-summary').textContent = composeCycleSummary(s, phase);
-    renderCycleWave(phase.position ?? 0, phase.zone);
-
-    // Active stage column (highlight with zone color)
-    document.querySelectorAll('#cycle-frame .frame-col').forEach(el => {
-      el.classList.toggle('active', el.dataset.zone === phase.zone);
-    });
+    // Cycle + commentary render is per-strategy (see renderForStrategy)
+    // so QQQ vs SPX uses each view's own pnl/headline.
 
     // Footer
     $('footer').textContent = s.generated_at_utc ? `Generated ${s.generated_at_utc}` : '';
 
   } catch (err) {
     $('signal-label').textContent = 'Error';
-    $('cycle-summary').textContent = `Failed to load state: ${err.message}`;
+    $('commentary-body').innerHTML =
+      `<p class="commentary-p">Failed to load state: ${esc(err.message)}</p>`;
     console.error(err);
   }
 }
@@ -1257,6 +1406,20 @@ function renderForStrategy(s, strategyKey) {
   // Accounts
   const ta = strat.trading_accounts || s.trading_accounts || {};
   renderAccounts(ta);
+
+  // Cycle + commentary — use per-strategy pnl_state + headline so the
+  // narrative's DD / YTD / lifetime stats match the numbers box above.
+  const viewState = Object.assign({}, s, {
+    pnl_state: strat.pnl_state || s.pnl_state,
+    headline: { gspc: h },
+  });
+  const phase = (viewState.cycle && viewState.cycle.zone) ? viewState.cycle : deriveCyclePhase(viewState);
+  $('stage-name').textContent = phase.label || '—';
+  renderCycleWave(phase.position ?? 0, phase.zone);
+  renderCommentary(viewState, phase);
+  document.querySelectorAll('#cycle-frame .frame-col').forEach(el => {
+    el.classList.toggle('active', el.dataset.zone === phase.zone);
+  });
 
   // URL hash
   const newHash = '#' + shortHashFor(strategyKey);
@@ -1368,12 +1531,18 @@ function buildAccountCard(name, data, badge, idx) {
 }
 
 // ─── Strategy select + hash ─────────────────────────────────────
+function collapseCommentaryDetails() {
+  const d = $('commentary-details');
+  if (d) d.open = false;
+}
 $('strategy-select').addEventListener('change', e => {
+  collapseCommentaryDetails();
   if (currentState) renderForStrategy(currentState, e.target.value);
 });
 window.addEventListener('hashchange', () => {
   const k = getStrategyFromHash();
   if (k && currentState && k !== currentStrategy) {
+    collapseCommentaryDetails();
     $('strategy-select').value = k;
     renderForStrategy(currentState, k);
   }
