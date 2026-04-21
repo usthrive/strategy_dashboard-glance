@@ -50,6 +50,14 @@
     #chart-container { width: 100%; min-height: 180px; }
     .u-wrap { background: transparent !important; }
     .chart-legend { text-align: center; font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
+    .strategy-select-card { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+    .strategy-select-card label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .strategy-select-card select {
+      flex: 1; background: #0f1320; color: var(--fg);
+      border: 1px solid #2a3245; border-radius: 4px;
+      padding: 6px 10px; font-size: 0.85rem; font-family: inherit; cursor: pointer;
+    }
+    .strategy-select-card select:focus { outline: none; border-color: var(--green); }
     .accounts-card-header { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; }
     .accounts-card-header.live { background: var(--green); color: #000; }
     .accounts-card-header.paper { background: var(--amber); color: #000; }
@@ -69,6 +77,11 @@
   <div class="container">
     <div id="stale-banner" class="stale-banner" style="display:none;"></div>
     <h1 id="header">SP500 12-Stage Strategy — loading…</h1>
+
+    <div class="card strategy-select-card" id="strategy-select-card" style="display:none;">
+      <label for="strategy-select">Strategy</label>
+      <select id="strategy-select"></select>
+    </div>
 
     <div class="card action-card">
       <div id="action" class="action-label">—</div>
@@ -106,7 +119,7 @@
     <div class="card grid">
       <div class="metric">
         <div id="cagr" class="metric-value">—</div>
-        <div class="metric-label">CAGR (^GSPC)</div>
+        <div class="metric-label" id="cagr-label">CAGR</div>
       </div>
       <div class="metric">
         <div id="sharpe" class="metric-value">—</div>
@@ -172,28 +185,68 @@ function isStale(asOf) {
   return diffDays > 3.5;
 }
 
+// Global state for strategy switching without re-fetching
+let currentState = null;
+let currentStrategy = null;
+const DEFAULT_STRATEGY = 'SP500_12_Stage_Strategy';
+
+function getStrategyFromHash() {
+  // URL hash → strategy key, e.g. #qqq → QQQ_via_SP500_12_Stage_Strategy
+  const h = (location.hash || '').replace(/^#/, '').toLowerCase();
+  if (!h) return null;
+  if (h === 'qqq' || h === 'qqq_via_sp500_12_stage_strategy') return 'QQQ_via_SP500_12_Stage_Strategy';
+  if (h === 'sp500' || h === 'spx' || h === 'sp500_12_stage_strategy') return 'SP500_12_Stage_Strategy';
+  return null;
+}
+
+function shortHashFor(strategyKey) {
+  if (strategyKey === 'QQQ_via_SP500_12_Stage_Strategy') return 'qqq';
+  if (strategyKey === 'SP500_12_Stage_Strategy') return 'sp500';
+  return strategyKey.toLowerCase();
+}
+
 async function load() {
   try {
     const resp = await fetch(STATE_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const s = await resp.json();
+    currentState = s;
 
     const asOf = s.as_of_date || 'unknown';
     const action = (s.action && s.action.action) || 'UNKNOWN';
     const lev = s.leverage != null ? s.leverage : '?';
     const trigger = (s.action && s.action.trigger) || '';
 
-    // Header
-    document.getElementById('header').textContent = `SP500 12-Stage Strategy — ${asOf}`;
-
-    // Stale banner
+    // Stale banner (shared across strategies — reflects pipeline freshness)
     if (isStale(asOf)) {
       const banner = document.getElementById('stale-banner');
       banner.textContent = `⚠ STALE — last update: ${asOf}`;
       banner.style.display = 'block';
     }
 
-    // Action card
+    // Populate strategy selector from state.strategies, then render the
+    // initial selection (URL hash > default).
+    const strategies = s.strategies || {};
+    const select = document.getElementById('strategy-select');
+    select.innerHTML = '';
+    Object.keys(strategies).forEach(function(key) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = strategies[key].label || key;
+      select.appendChild(opt);
+    });
+    if (Object.keys(strategies).length > 1) {
+      document.getElementById('strategy-select-card').style.display = '';
+    }
+
+    const initialKey = getStrategyFromHash() || (
+      Object.keys(strategies).find(function(k) { return strategies[k].is_default; })
+      || DEFAULT_STRATEGY
+    );
+    select.value = initialKey;
+    renderForStrategy(s, initialKey);
+
+    // Action card (shared — same SPX-driven action across strategies)
     const actionEl = document.getElementById('action');
     let displayAction = action;
     if (action === 'HOLD') {
@@ -204,7 +257,10 @@ async function load() {
     document.getElementById('leverage').textContent = `${lev}× leverage`;
     document.getElementById('trigger').textContent = trigger;
 
-    // Market metrics
+    // Market + PnL metrics (shared — derived from SP500 strategy state).
+    // QQQ-specific PnL (YTD on QQQ-execution etc.) is a future enhancement;
+    // for now both views show the SP500 strategy's portfolio metrics, which
+    // accurately reflect the SHARED signals driving both.
     const ms = s.market_state || {};
     const ps = s.pnl_state || {};
     const cs = s.catastrophe_stops || {};
@@ -212,31 +268,26 @@ async function load() {
 
     document.getElementById('gspc').textContent = fmt(ms.gspc_close, 1);
 
-    // Trade P&L (unrealized return of current trade)
     const tradePnl = ps.unrealized_return_pct;
     const tradePnlEl = document.getElementById('trade-pnl');
     tradePnlEl.textContent = fmtPct(tradePnl);
     if (tradePnl != null) tradePnlEl.style.color = tradePnl >= 0 ? 'var(--green)' : 'var(--red)';
 
-    // YTD return with color coding
     const ytdPct = ps.ytd_return_pct;
     const ytdEl = document.getElementById('ytd');
     ytdEl.textContent = fmtPct(ytdPct);
     if (ytdPct != null) ytdEl.style.color = ytdPct >= 0 ? 'var(--green)' : 'var(--red)';
 
-    // Yesterday's strategy return
     const stratDay = ps.yesterday_strategy_return_pct;
     const stratDayEl = document.getElementById('strat-1d');
     stratDayEl.textContent = fmtPct(stratDay);
     if (stratDay != null) stratDayEl.style.color = stratDay >= 0 ? 'var(--green)' : 'var(--red)';
 
-    // Yesterday's S&P 500 return
     const spyDay = ps.yesterday_spy_return_pct;
     const spyDayEl = document.getElementById('spy-1d');
     spyDayEl.textContent = fmtPct(spyDay);
     if (spyDay != null) spyDayEl.style.color = spyDay >= 0 ? 'var(--green)' : 'var(--red)';
 
-    // Intra-trade DD with color coding
     const ddPct = eq_stop.intra_dd_pct;
     const ddEl = document.getElementById('dd');
     ddEl.textContent = fmtPct(ddPct);
@@ -245,118 +296,17 @@ async function load() {
       else if (ddPct > 5) ddEl.className = 'metric-value dd-warn';
     }
 
-    // Headline stats
-    const h = (s.headline && s.headline.gspc) || {};
-    document.getElementById('cagr').textContent = fmtPct(h.cagr);
-    document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
-    document.getElementById('maxdd').textContent = fmtPct(h.maxdd);
-
-    // Bars in trade
+    // Bars in trade (shared)
     const ls = s.leverage_state || {};
     const hybrid = ls.tla_tle_hybrid || {};
     document.getElementById('bars-in-trade').textContent =
       hybrid.bars_since_entry != null ? hybrid.bars_since_entry : '—';
 
-    // Commentary
+    // Commentary + footer (shared)
     const comm = s.simple_commentary || s.commentary || 'No commentary available.';
     document.getElementById('commentary').textContent = comm;
-
-    // Footer
     const gen = s.generated_at_utc || '';
     document.getElementById('footer').textContent = `Generated: ${gen}`;
-
-    // Trading Accounts — Live and Paper Test cards, one row per account
-    const ta = s.trading_accounts;
-    if (ta && (ta.live_accounts || ta.paper_accounts)) {
-      function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, function(c) {
-          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-        });
-      }
-
-      function buildAccountRow(name, data) {
-        if (!data) return null;
-        const row = document.createElement('div');
-        row.className = 'account-row';
-
-        const displayName = name.replace(/_/g, ' ').toUpperCase();
-        const acctId = data.account_id_masked || '';
-
-        // Line 1: name + masked id (left) · NLV (right)
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'account-row-name';
-        let nameHtml = escapeHtml(displayName);
-        if (acctId) {
-          nameHtml += '<span class="account-id">' + escapeHtml(acctId) + '</span>';
-        }
-        nameDiv.innerHTML = nameHtml;
-        row.appendChild(nameDiv);
-
-        const nlvDiv = document.createElement('div');
-        nlvDiv.className = 'account-row-nlv';
-        if (!data.connected) {
-          nlvDiv.innerHTML = '<span class="account-disconnected">Not connected</span>';
-          row.appendChild(nlvDiv);
-          return row;
-        }
-        nlvDiv.textContent = data.equity != null
-          ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
-          : '\u2014';
-        row.appendChild(nlvDiv);
-
-        // Line 2 (full width): positions
-        if (data.positions && data.positions.length > 0) {
-          const posDiv = document.createElement('div');
-          posDiv.className = 'account-row-positions';
-          posDiv.innerHTML = data.positions.map(function(p) {
-            var qty = p.qty != null ? Number(p.qty).toFixed(2) : '?';
-            var val = p.market_value != null
-              ? ' ($' + Number(p.market_value).toLocaleString(undefined, {maximumFractionDigits: 0}) + ')'
-              : '';
-            return escapeHtml(qty + ' ' + p.symbol + val);
-          }).join(' · ');
-          row.appendChild(posDiv);
-        }
-
-        // Line 3 (full width): return line
-        const inc = data.inception;
-        if (inc && inc.return_pct != null) {
-          const retDiv = document.createElement('div');
-          retDiv.className = 'account-row-return';
-          const sign = inc.return_pct >= 0 ? '+' : '';
-          const acctColor = inc.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
-          let html = '<span style="color:' + acctColor + ';font-weight:600;">'
-            + sign + inc.return_pct.toFixed(2) + '%</span>'
-            + '<span class="account-row-bench">since ' + escapeHtml(inc.inception_date) + '</span>';
-          if (inc.bench_return_pct != null) {
-            const benchSign = inc.bench_return_pct >= 0 ? '+' : '';
-            const benchLabel = inc.bench_label || 'Benchmark';
-            html += '<span class="account-row-bench">(' + escapeHtml(benchLabel) + ': '
-              + benchSign + inc.bench_return_pct.toFixed(2) + '%)</span>';
-          }
-          retDiv.innerHTML = html;
-          row.appendChild(retDiv);
-        }
-
-        return row;
-      }
-
-      function fillCard(cardId, rowsId, accounts) {
-        const rowsContainer = document.getElementById(rowsId);
-        rowsContainer.innerHTML = '';
-        const names = Object.keys(accounts || {});
-        names.forEach(function(name) {
-          const row = buildAccountRow(name, accounts[name]);
-          if (row) rowsContainer.appendChild(row);
-        });
-        if (names.length > 0) {
-          document.getElementById(cardId).style.display = '';
-        }
-      }
-
-      fillCard('live-accounts-card', 'live-accounts-rows', ta.live_accounts);
-      fillCard('paper-accounts-card', 'paper-accounts-rows', ta.paper_accounts);
-    }
 
   } catch (err) {
     document.getElementById('header').textContent = 'SP500 12-Stage Strategy — Error';
@@ -364,15 +314,165 @@ async function load() {
   }
 }
 
+// ── Strategy-specific rendering ────────────────────────────────────
+// Called on initial load AND every time the user changes the strategy
+// dropdown. Updates the page header, headline KPIs, trading accounts,
+// and triggers the equity-chart reload — but does NOT touch the shared
+// action/commentary/cycle state which is identical across strategies.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function buildAccountRow(name, data) {
+  if (!data) return null;
+  const row = document.createElement('div');
+  row.className = 'account-row';
+  const displayName = name.replace(/_/g, ' ').toUpperCase();
+  const acctId = data.account_id_masked || '';
+
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'account-row-name';
+  let nameHtml = escapeHtml(displayName);
+  if (acctId) nameHtml += '<span class="account-id">' + escapeHtml(acctId) + '</span>';
+  nameDiv.innerHTML = nameHtml;
+  row.appendChild(nameDiv);
+
+  const nlvDiv = document.createElement('div');
+  nlvDiv.className = 'account-row-nlv';
+  if (!data.connected) {
+    nlvDiv.innerHTML = '<span class="account-disconnected">Not connected</span>';
+    row.appendChild(nlvDiv);
+    return row;
+  }
+  nlvDiv.textContent = data.equity != null
+    ? '$' + Number(data.equity).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+    : '\u2014';
+  row.appendChild(nlvDiv);
+
+  if (data.positions && data.positions.length > 0) {
+    const posDiv = document.createElement('div');
+    posDiv.className = 'account-row-positions';
+    posDiv.innerHTML = data.positions.map(function(p) {
+      var qty = p.qty != null ? Number(p.qty).toFixed(2) : '?';
+      var val = p.market_value != null
+        ? ' ($' + Number(p.market_value).toLocaleString(undefined, {maximumFractionDigits: 0}) + ')'
+        : '';
+      return escapeHtml(qty + ' ' + p.symbol + val);
+    }).join(' · ');
+    row.appendChild(posDiv);
+  } else {
+    const posDiv = document.createElement('div');
+    posDiv.className = 'account-row-positions';
+    posDiv.textContent = 'No positions yet (cash)';
+    row.appendChild(posDiv);
+  }
+
+  const inc = data.inception;
+  if (inc && inc.return_pct != null) {
+    const retDiv = document.createElement('div');
+    retDiv.className = 'account-row-return';
+    const sign = inc.return_pct >= 0 ? '+' : '';
+    const acctColor = inc.return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+    let html = '<span style="color:' + acctColor + ';font-weight:600;">'
+      + sign + inc.return_pct.toFixed(2) + '%</span>'
+      + '<span class="account-row-bench">since ' + escapeHtml(inc.inception_date) + '</span>';
+    if (inc.bench_return_pct != null) {
+      const benchSign = inc.bench_return_pct >= 0 ? '+' : '';
+      const benchLabel = inc.bench_label || 'Benchmark';
+      html += '<span class="account-row-bench">(' + escapeHtml(benchLabel) + ': '
+        + benchSign + inc.bench_return_pct.toFixed(2) + '%)</span>';
+    }
+    retDiv.innerHTML = html;
+    row.appendChild(retDiv);
+  }
+  return row;
+}
+
+function fillCard(cardId, rowsId, accounts) {
+  const rowsContainer = document.getElementById(rowsId);
+  rowsContainer.innerHTML = '';
+  const names = Object.keys(accounts || {});
+  names.forEach(function(name) {
+    const row = buildAccountRow(name, accounts[name]);
+    if (row) rowsContainer.appendChild(row);
+  });
+  document.getElementById(cardId).style.display = names.length > 0 ? '' : 'none';
+}
+
+function renderForStrategy(s, strategyKey) {
+  currentStrategy = strategyKey;
+  const strat = (s.strategies || {})[strategyKey] || {};
+  const stratLabel = strat.label || 'SP500 12-Stage Strategy';
+  const asOf = s.as_of_date || 'unknown';
+
+  // Header label
+  document.getElementById('header').textContent = `${stratLabel} — ${asOf}`;
+  document.title = `${stratLabel} — Glance`;
+
+  // Headline KPIs — read from strategy.headline if present, else fallback
+  // to top-level state.headline.gspc (SP500 default).
+  let h = {};
+  if (strat.headline) {
+    // headline shape: {<bench_key>: {cagr, sharpe, maxdd, span}}
+    const hKeys = Object.keys(strat.headline);
+    if (hKeys.length > 0) h = strat.headline[hKeys[0]] || {};
+  }
+  if (!h.cagr && s.headline && s.headline.gspc) {
+    h = s.headline.gspc;
+  }
+  const benchSym = (strat.benchmark && strat.benchmark.symbol) || 'GSPC';
+  document.getElementById('cagr').textContent = fmtPct(h.cagr);
+  document.getElementById('cagr-label').textContent = `CAGR (${benchSym})`;
+  document.getElementById('sharpe').textContent = fmt(h.sharpe, 3);
+  document.getElementById('maxdd').textContent = fmtPct(h.maxdd);
+
+  // Trading accounts (per-strategy split)
+  const ta = strat.trading_accounts || s.trading_accounts || {};
+  fillCard('live-accounts-card', 'live-accounts-rows', ta.live_accounts || {});
+  fillCard('paper-accounts-card', 'paper-accounts-rows', ta.paper_accounts || {});
+
+  // URL hash so the view is shareable
+  const newHash = '#' + shortHashFor(strategyKey);
+  if (location.hash !== newHash) {
+    history.replaceState(null, '', newHash);
+  }
+
+  // Equity chart reloads using currentStrategy's URL.
+  // Defensive check: on initial load(), the second <script> block (where
+  // loadEquityCurve is defined) hasn't run yet — skip in that case;
+  // the explicit loadEquityCurve() call at the bottom of that block
+  // handles the first render.
+  if (typeof loadEquityCurve === 'function') loadEquityCurve();
+}
+
+// Strategy selector change handler
+document.getElementById('strategy-select').addEventListener('change', function(e) {
+  if (currentState) renderForStrategy(currentState, e.target.value);
+});
+
+// React to URL hash changes (back/forward navigation)
+window.addEventListener('hashchange', function() {
+  const k = getStrategyFromHash();
+  if (k && currentState && k !== currentStrategy) {
+    document.getElementById('strategy-select').value = k;
+    renderForStrategy(currentState, k);
+  }
+});
+
 load();
-// Auto-refresh every 5 minutes
+// Auto-refresh every 5 minutes (re-renders for the current strategy)
 setInterval(load, 5 * 60 * 1000);
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
 <script>
 // ── Equity Performance Chart ─────────────────────────────────────
-const EQUITY_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/public_equity_curve.json';
+// URL is selected per strategy from currentState.strategies[currentStrategy].
+// Falls back to the SP500 curve when the per-strategy URL isn't published yet.
+const SUPABASE_BASE = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/';
+const DEFAULT_EQUITY_OBJECT = 'public_equity_curve.json';
 
 let eqData = null;
 let uplotInst = null;
@@ -395,15 +495,25 @@ function sliceToYears(ts, years) {
   return start;
 }
 
+function currentBenchLabel() {
+  // Pull benchmark label from the active strategy block (set by renderForStrategy).
+  if (currentState && currentStrategy) {
+    const strat = (currentState.strategies || {})[currentStrategy];
+    if (strat && strat.benchmark && strat.benchmark.label) return strat.benchmark.label;
+  }
+  return 'S&P 500';
+}
+
 function updateLegend() {
   const el = document.getElementById('chart-legend');
+  const benchLabel = currentBenchLabel();
   if (chartView === 'live') {
     const acctType = (eqData.actual_account_type || 'paper').toUpperCase();
     el.innerHTML = '<span style="color:#f59e0b;">&#9644;</span> Actual (' + acctType + ') &nbsp;' +
-                   '<span style="color:#8899aa;">&#9644;</span> S&amp;P 500';
+                   '<span style="color:#8899aa;">&#9644;</span> ' + escapeHtml(benchLabel);
   } else {
     el.innerHTML = '<span style="color:#22c55e;">&#9644;</span> Strategy &nbsp;' +
-                   '<span style="color:#8899aa;">&#9644;</span> S&amp;P 500';
+                   '<span style="color:#8899aa;">&#9644;</span> ' + escapeHtml(benchLabel);
   }
 }
 
@@ -503,26 +613,52 @@ document.querySelectorAll('.view-btn').forEach(function(btn) {
 });
 
 async function loadEquityCurve() {
+  // Pick the URL from the active strategy. Falls back to default SP500 curve
+  // if the per-strategy URL isn't set.
+  let objectName = DEFAULT_EQUITY_OBJECT;
+  if (currentState && currentStrategy) {
+    const strat = (currentState.strategies || {})[currentStrategy];
+    if (strat && strat.equity_curve_object) objectName = strat.equity_curve_object;
+  }
+  const url = SUPABASE_BASE + objectName;
   try {
-    var resp = await fetch(EQUITY_URL, { cache: 'no-store' });
+    var resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     eqData = await resp.json();
     if (!eqData.ts || eqData.ts.length < 2) throw new Error('No data');
     document.getElementById('chart-card').style.display = '';
 
-    // Show Live button if actual data available (>= 2 weekly points)
-    if (eqData.actual_ts && eqData.actual_ts.length >= 2) {
-      document.getElementById('live-btn').style.display = '';
+    // Live (actual equity) toggle: only show for SP500 strategy currently —
+    // QQQ live equity tracking isn't wired yet, so the Live button stays
+    // hidden when on the QQQ tab.
+    const liveBtn = document.getElementById('live-btn');
+    if (eqData.actual_ts && eqData.actual_ts.length >= 2 &&
+        currentStrategy === 'SP500_12_Stage_Strategy') {
+      liveBtn.style.display = '';
+    } else {
+      liveBtn.style.display = 'none';
+      // If we'd been viewing the live chart, fall back to backtest
+      if (chartView === 'live') {
+        chartView = 'backtest';
+        document.querySelectorAll('.view-btn').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.view === 'backtest');
+        });
+      }
     }
 
     renderChart();
     resizeObs.observe(document.getElementById('chart-container'));
   } catch (err) {
-    console.warn('Equity curve load failed:', err.message);
+    console.warn('Equity curve load failed for ' + objectName + ':', err.message);
+    // Hide chart card if we can't load any curve.
+    document.getElementById('chart-card').style.display = 'none';
   }
 }
 
-loadEquityCurve();
+// Initial chart load is triggered by renderForStrategy() inside load() above.
+// If the page loaded with a deep-linked URL hash and load() already finished,
+// trigger one more pass now that this script block has defined loadEquityCurve.
+if (currentState && currentStrategy) loadEquityCurve();
 </script>
 </body>
 </html>
