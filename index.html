@@ -433,14 +433,38 @@
       margin-bottom: 4px;
     }
 
-    /* ─── Today grid (3 cols) ────────────────────────────────────── */
+    /* ─── Today grid (split: benchmark | divider | strategy 2x2) ── */
     .section-card { padding: 18px 20px 20px; }
     .section-card .overline { margin-bottom: 14px; }
     .today-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px 10px;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+      gap: 18px;
+      align-items: stretch;
     }
+    .today-col-header {
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 12px;
+    }
+    .today-left {
+      display: grid;
+      grid-template-rows: auto 1fr 1fr;
+      padding-right: 18px;
+      border-right: 1px solid var(--glass-edge);
+      row-gap: 18px;
+    }
+    .today-right {
+      display: grid;
+      grid-template-rows: auto 1fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
+      row-gap: 18px;
+      column-gap: 10px;
+    }
+    .today-right .today-col-header { grid-column: 1 / -1; }
     .metric-cell { text-align: left; }
     .metric-num {
       font-size: 22px;
@@ -777,29 +801,35 @@
       <div class="glass section-card fade-in" style="--fi-delay: 380ms;">
         <div class="overline">Today <span class="overline-asof" id="today-asof"></span></div>
         <div class="today-grid">
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-gspc">—</div>
-            <div class="metric-sub" id="m-gspc-label">S&amp;P 500</div>
+          <div class="today-left">
+            <div class="today-col-header">Benchmark</div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-gspc">—</div>
+              <div class="metric-sub" id="m-gspc-label">S&amp;P 500</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-spy-1d">—</div>
+              <div class="metric-sub" id="m-spy-1d-label">S&amp;P 500 1D</div>
+            </div>
           </div>
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-trade-pnl">—</div>
-            <div class="metric-sub">Trade P&amp;L</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-ytd">—</div>
-            <div class="metric-sub">YTD Return</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-strat-1d">—</div>
-            <div class="metric-sub">Strategy 1D</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-spy-1d">—</div>
-            <div class="metric-sub" id="m-spy-1d-label">S&amp;P 500 1D</div>
-          </div>
-          <div class="metric-cell">
-            <div class="metric-num tnum" id="m-dd">—</div>
-            <div class="metric-sub">Intra-trade DD</div>
+          <div class="today-right">
+            <div class="today-col-header">Strategy</div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-trade-pnl">—</div>
+              <div class="metric-sub">Trade P&amp;L</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-ytd">—</div>
+              <div class="metric-sub">YTD Return</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-strat-1d">—</div>
+              <div class="metric-sub">Strategy 1D</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-num tnum" id="m-dd">—</div>
+              <div class="metric-sub">Strategy DD</div>
+            </div>
           </div>
         </div>
       </div>
