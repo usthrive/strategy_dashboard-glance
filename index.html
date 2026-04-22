@@ -141,33 +141,28 @@
     /* ─── Header ─────────────────────────────────────────────────── */
     .header {
       display: flex;
-      align-items: center;
-      gap: 10px;
+      align-items: flex-start;
+      gap: 12px;
       margin-bottom: 20px;
     }
-    .logo-tile {
-      width: 28px; height: 28px;
-      border-radius: 7px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-      box-shadow: var(--shadow-accent);
-      display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-display);
-      font-style: italic;
-      color: #fff;
-      font-size: 16px;
-      line-height: 1;
+    .brand-block {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
-    .brand-text { flex: 1; min-width: 0; }
-    .brand-name {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: -0.2px;
-      color: var(--ink);
+    .brand-logo {
+      height: 32px;
+      width: auto;
+      max-width: 240px;
+      display: block;
+      filter: drop-shadow(0 0 8px rgba(138,164,255,0.18));
     }
     .brand-sub {
       font-size: 10px;
       color: var(--mute);
-      margin-top: 1px;
+      letter-spacing: 0.2px;
     }
     .header-right {
       display: flex; flex-direction: column; align-items: flex-end;
@@ -735,10 +730,8 @@
     <div id="stale-banner" class="stale-banner"></div>
 
     <div class="header fade-in" style="--fi-delay: 0ms;">
-      <div class="logo-tile">P</div>
-      <div class="brand-text">
-        <div class="brand-name">Penta Capital Strategies</div>
-        <div class="brand-sub" id="brand-sub">SP500 12-Stage Strategy</div>
+      <div class="brand-block">
+        <img class="brand-logo" src="logo-hybrid.png" alt="Penta Capital Strategies">
       </div>
       <div class="header-right">
         <div class="header-date" id="header-date">—</div>
@@ -1429,7 +1422,10 @@ function renderForStrategy(s, strategyKey) {
   const strat = (s.strategies || {})[strategyKey] || {};
   const stratLabel = strat.label || 'SP500 12-Stage Strategy';
 
-  $('brand-sub').textContent = stratLabel;
+  // brand-sub may be removed from the header (strategy name shown in the
+  // selector dropdown instead) — guard against missing element.
+  const brandSubEl = $('brand-sub');
+  if (brandSubEl) brandSubEl.textContent = stratLabel;
   document.title = `Penta — ${stratLabel}`;
 
   // Headline KPIs — prefer per-strategy, else top-level gspc.
