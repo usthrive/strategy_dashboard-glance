@@ -535,27 +535,41 @@
     }
 
     /* ─── Lifetime stats ─────────────────────────────────────────── */
-    .stats-grid {
+    /* Strategy-vs-B&H comparison table */
+    .stats-compare {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px 16px;
+      grid-template-columns: auto 1fr 1fr;
+      column-gap: 14px;
+      row-gap: 8px;
+      align-items: baseline;
     }
-    .stat-cell { text-align: left; }
-    .stat-num {
-      font-size: 24px;
+    .stats-compare .col-head {
+      font-size: 9.5px;
       font-weight: 500;
-      line-height: 1.1;
-      letter-spacing: -0.6px;
-      color: var(--ink);
-    }
-    .stat-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 1.6px;
+      letter-spacing: 1.4px;
       text-transform: uppercase;
       color: var(--mute);
-      margin-top: 4px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--glass-edge);
     }
+    .stats-compare .col-head.right { text-align: right; }
+    .stats-compare .row-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+    .stats-compare .stat-val {
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .stats-compare .stat-val.bnh { color: var(--mute); }
     .stats-note {
       font-size: 11px;
       line-height: 1.55;
@@ -836,26 +850,25 @@
         </div>
       </div>
 
-      <!-- Lifetime stats -->
+      <!-- Lifetime stats (Strategy vs Buy & Hold) -->
       <div class="glass section-card fade-in" style="--fi-delay: 780ms;">
-        <div class="overline">Lifetime stats</div>
-        <div class="stats-grid">
-          <div class="stat-cell">
-            <div class="stat-num tnum" id="s-cagr">—</div>
-            <div class="stat-label" id="s-cagr-label">CAGR</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-num tnum" id="s-sharpe">—</div>
-            <div class="stat-label">Sharpe</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-num tnum" id="s-maxdd">—</div>
-            <div class="stat-label">Max DD</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-num tnum" id="s-bars">—</div>
-            <div class="stat-label">Bars in trade</div>
-          </div>
+        <div class="overline" id="stats-overline">Lifetime stats</div>
+        <div class="stats-compare">
+          <div></div>
+          <div class="col-head right" id="col-strategy">Strategy</div>
+          <div class="col-head right" id="col-bnh">Buy &amp; Hold</div>
+
+          <div class="row-label">CAGR</div>
+          <div class="stat-val" id="s-cagr">—</div>
+          <div class="stat-val bnh" id="b-cagr">—</div>
+
+          <div class="row-label">Sharpe</div>
+          <div class="stat-val" id="s-sharpe">—</div>
+          <div class="stat-val bnh" id="b-sharpe">—</div>
+
+          <div class="row-label">Max DD</div>
+          <div class="stat-val" id="s-maxdd">—</div>
+          <div class="stat-val bnh" id="b-maxdd">—</div>
         </div>
         <p class="stats-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
       </div>
@@ -1360,11 +1373,8 @@ async function load() {
       statusValue.classList.add('kv-faint');
     }
 
-    // Bars in trade
-    const ls = s.leverage_state || {};
-    const hybrid = ls.tla_tle_hybrid || {};
-    const bars = hybrid.bars_since_entry;
-    animateCount($('s-bars'), bars != null ? String(bars) : '—', 1100, 720);
+    // bars_since_entry is the live-trade duration, not a lifetime stat —
+    // it lives in the hero/meta context (not Lifetime Stats anymore).
 
     // Cycle + commentary render is per-strategy (see renderForStrategy)
     // so QQQ vs SPX uses each view's own pnl/headline.
@@ -1392,13 +1402,18 @@ function renderForStrategy(s, strategyKey) {
   $('brand-sub').textContent = stratLabel;
   document.title = `Penta — ${stratLabel}`;
 
-  // Headline KPIs
+  // Headline KPIs — prefer per-strategy, else top-level gspc.
+  // Track whether we fell back so the bench headline can match the span.
   let h = {};
+  let usedTopLevelHeadline = false;
   if (strat.headline) {
     const hKeys = Object.keys(strat.headline);
     if (hKeys.length > 0) h = strat.headline[hKeys[0]] || {};
   }
-  if (!h.cagr && s.headline && s.headline.gspc) h = s.headline.gspc;
+  if (!h.cagr && s.headline && s.headline.gspc) {
+    h = s.headline.gspc;
+    usedTopLevelHeadline = true;
+  }
 
   // Market / PnL (load early so benchLabel is available for the lifetime
   // CAGR label below — both sections share the same label).
@@ -1412,10 +1427,29 @@ function renderForStrategy(s, strategyKey) {
   const benchLabel = ms.bench_label || (strat.benchmark && strat.benchmark.label) || 'S&P 500';
   const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
 
-  animateCount($('s-cagr'), h.cagr != null ? fmtPct(h.cagr, 1, false) : '—', 1100, 720);
-  $('s-cagr-label').textContent = `CAGR (${benchLabel})`;
-  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 3) : '—', 1100, 770);
-  animateCount($('s-maxdd'), h.maxdd != null ? fmtPct(h.maxdd, 1, false) : '—', 1100, 820);
+  // Strategy stats (left column)
+  animateCount($('s-cagr'),   h.cagr   != null ? fmtPct(h.cagr, 1, false)    : '—', 1100, 720);
+  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 2)         : '—', 1100, 770);
+  animateCount($('s-maxdd'),  h.maxdd  != null ? fmtPct(Math.abs(h.maxdd), 1, false) : '—', 1100, 820);
+
+  // Buy & Hold benchmark stats (right column). Mirror the strategy-headline
+  // fallback so spans match: when we fell back to top-level headline
+  // (SPX case — 98yr GSPC), pair with top-level bench_headline (98yr GSPC).
+  // Otherwise use the per-strategy bench_headline (e.g. 27yr QQQ).
+  const bh = usedTopLevelHeadline
+    ? (s.bench_headline || {})
+    : ((strat && strat.bench_headline) || s.bench_headline || {});
+  animateCount($('b-cagr'),   bh.cagr   != null ? fmtPct(bh.cagr, 1, false)    : '—', 1100, 740);
+  animateCount($('b-sharpe'), bh.sharpe != null ? fmtNum(bh.sharpe, 2)         : '—', 1100, 790);
+  animateCount($('b-maxdd'),  bh.maxdd  != null ? fmtPct(Math.abs(bh.maxdd), 1, false) : '—', 1100, 840);
+
+  // Column header + overline span: show span if available.
+  // Prefer the bench_headline's own label (set by the backend to the
+  // backtest_benchmark label — e.g. "S&P 500" for ^GSPC, "Nasdaq-100"
+  // for ^NDX) over the live-account benchLabel.
+  $('col-bnh').textContent = `${bh.label || benchLabel} B&H`;
+  const span = h.span || bh.span;
+  $('stats-overline').textContent = span ? `Lifetime stats · ${span} backtest` : 'Lifetime stats';
   animateCount($('m-gspc'), benchClose != null ? fmtNum(benchClose, 1) : '—', 1100, 430);
   $('m-gspc-label').textContent = benchLabel;
 
