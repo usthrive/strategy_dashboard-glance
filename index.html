@@ -600,6 +600,12 @@
 
     /* ─── Accounts ───────────────────────────────────────────────── */
     .accounts-section .overline { margin-bottom: 10px; display: block; }
+    .accounts-note {
+      font-size: 10.5px;
+      line-height: 1.55;
+      color: var(--mute);
+      margin: 0 0 12px;
+    }
     .accounts-list > * + * { margin-top: 10px; }
     .account-card { padding: 14px 16px 14px; }
     .acc-row-1 {
@@ -899,6 +905,7 @@
       <!-- Accounts -->
       <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 920ms; display: none;">
         <span class="overline">Accounts <span class="overline-asof" id="accounts-asof"></span></span>
+        <p class="accounts-note">Returns measured from the SPY fill price at account inception to the latest EOD close. Benchmark uses the same fill-to-close window.</p>
         <div class="accounts-list" id="accounts-list"></div>
       </div>
     </div>
