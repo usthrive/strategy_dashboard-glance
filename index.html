@@ -520,7 +520,7 @@
       font-weight: 600;
       box-shadow: var(--shadow-accent);
     }
-    .view-toggle { margin-bottom: 10px; display: flex; justify-content: flex-end; }
+    .chart-toolbar { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .chart-wrap {
       width: 100%;
       position: relative;
@@ -850,16 +850,16 @@
             <span class="overline">Backtest</span>
             <div class="display-sm" id="chart-title">Strategy vs. S&amp;P 500</div>
           </div>
-          <div class="seg" id="yr-toggle">
-            <button type="button" class="active" data-years="1">1Y</button>
-            <button type="button" data-years="3">3Y</button>
-            <button type="button" data-years="5">5Y</button>
-          </div>
-        </div>
-        <div class="view-toggle">
-          <div class="seg" id="view-toggle">
-            <button type="button" class="active" data-view="backtest">Backtest</button>
-            <button type="button" data-view="live" id="live-btn" style="display: none;">Live</button>
+          <div class="chart-toolbar">
+            <div class="seg" id="view-toggle" style="display: none;">
+              <button type="button" class="active" data-view="backtest">Backtest</button>
+              <button type="button" data-view="live" id="live-btn">Live</button>
+            </div>
+            <div class="seg" id="yr-toggle">
+              <button type="button" class="active" data-years="1">1Y</button>
+              <button type="button" data-years="3">3Y</button>
+              <button type="button" data-years="5">5Y</button>
+            </div>
           </div>
         </div>
         <div class="chart-wrap">
@@ -906,7 +906,7 @@
       <!-- Accounts -->
       <div class="accounts-section fade-in" id="accounts-section" style="--fi-delay: 920ms; display: none;">
         <span class="overline">Accounts <span class="overline-asof" id="accounts-asof"></span></span>
-        <p class="accounts-note">Returns measured from the SPY fill price at account inception to the latest EOD close. Benchmark uses the same fill-to-close window.</p>
+        <p class="accounts-note" id="accounts-note">Returns measured from the fill price at account inception to the latest EOD close. Benchmark uses the same fill-to-close window.</p>
         <div class="accounts-list" id="accounts-list"></div>
       </div>
     </div>
@@ -1632,9 +1632,18 @@ function renderForStrategy(s, strategyKey) {
   $('chart-title').textContent = `Strategy vs. ${benchLabel}`;
   $('legend-bench-label').textContent = benchLabel;
 
-  // Accounts
+  // Accounts — methodology note uses the strategy's tradable symbol
+  // (SPY for SPX, QQQ for both QQQ-routed strategies) so it doesn't
+  // hardcode "SPY fill price" for NDX/QQQ accounts.
   const ta = strat.trading_accounts || s.trading_accounts || {};
   renderAccounts(ta);
+  const traded = (strat.benchmark && strat.benchmark.symbol) || 'SPY';
+  const noteEl = document.getElementById('accounts-note');
+  if (noteEl) {
+    noteEl.textContent =
+      `Returns measured from the ${traded} fill price at account inception ` +
+      `to the latest EOD close. Benchmark uses the same fill-to-close window.`;
+  }
 
   // Cycle + commentary — use per-strategy pnl_state + headline so the
   // narrative's DD / YTD / lifetime stats match the numbers box above.
@@ -2049,14 +2058,31 @@ function niceTicks(min, max, count) {
 function pickXLabels(ts) {
   const n = ts.length;
   if (n < 2) return [];
-  const targetCount = 4;
-  const step = Math.floor(n / targetCount);
+  // Use day-resolution labels ("Apr 13") when the data spans < 6 months;
+  // month-year labels ("Apr 26") otherwise. Prevents collapsing all 4
+  // ticks onto one "Apr 26" when live data spans a few weeks.
+  const spanDays = (ts[n - 1] - ts[0]) / 86400;
+  const useDayFmt = spanDays < 180;
+  const fmt = (sec) => {
+    const d = new Date(sec * 1000);
+    if (useDayFmt) {
+      return d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return d.toLocaleString('en-US', { month: 'short' }) + " " + String(d.getFullYear()).slice(-2);
+  };
+  const targetCount = Math.min(4, n);
   const out = [];
+  const seen = new Set();
   for (let i = 0; i < targetCount; i++) {
-    const idx = Math.min(n - 1, i * step + Math.floor(step / 2));
-    const d = new Date(ts[idx] * 1000);
-    const label = d.toLocaleString('en-US', { month: 'short' }) + " " + String(d.getFullYear()).slice(-2);
-    out.push({ t: ts[idx], label });
+    // Distribute idx across [0, n-1] so first and last endpoints are real.
+    const idx = (targetCount === 1)
+      ? n - 1
+      : Math.round(i * (n - 1) / (targetCount - 1));
+    const t = ts[idx];
+    const label = fmt(t);
+    if (seen.has(label)) continue;  // dedupe duplicates
+    seen.add(label);
+    out.push({ t, label });
   }
   return out;
 }
@@ -2101,14 +2127,17 @@ async function loadEquityCurve() {
     $('chart-card').style.display = '';
 
     const liveBtn = $('live-btn');
+    const viewToggle = $('view-toggle');
     if (eqData.actual_ts && eqData.actual_ts.length >= 2 &&
         currentStrategy === 'SP500_12_Stage_Strategy') {
       liveBtn.style.display = '';
+      viewToggle.style.display = '';
     } else {
       liveBtn.style.display = 'none';
+      viewToggle.style.display = 'none';
       if (chartView === 'live') {
         chartView = 'backtest';
-        $('view-toggle').querySelectorAll('button').forEach(b => {
+        viewToggle.querySelectorAll('button').forEach(b => {
           b.classList.toggle('active', b.dataset.view === 'backtest');
         });
       }
