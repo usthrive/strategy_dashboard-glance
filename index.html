@@ -543,7 +543,20 @@
       font-size: 10px;
       color: var(--mute);
     }
-    .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      cursor: pointer; user-select: none;
+      padding: 2px 4px; border-radius: 4px;
+      transition: opacity 120ms var(--ease);
+    }
+    .legend-item:hover { background: rgba(255,255,255,0.03); }
+    .legend-item.hidden {
+      opacity: 0.35;
+    }
+    .legend-item.hidden .legend-label,
+    .legend-item.hidden .tnum {
+      text-decoration: line-through;
+    }
     .legend-swatch {
       display: inline-block;
       width: 14px; height: 2px;
@@ -554,6 +567,10 @@
     }
     .swatch-bench {
       border-top: 1.5px dashed var(--faint);
+      height: 0;
+    }
+    .swatch-bench2 {
+      border-top: 1.5px dotted rgba(238,242,246,0.40);
       height: 0;
     }
 
@@ -871,14 +888,14 @@
           <svg id="equity-chart" viewBox="0 0 370 180" preserveAspectRatio="none" aria-hidden="true"></svg>
         </div>
         <div class="chart-legend" id="chart-legend">
-          <span class="legend-item">
+          <span class="legend-item" data-series-key="strategy">
             <span class="legend-swatch swatch-strategy"></span>
-            <span id="legend-strategy-label">Strategy</span>
+            <span class="legend-label" id="legend-strategy-label">Strategy</span>
             <span class="tnum" id="legend-strategy-val"></span>
           </span>
-          <span class="legend-item">
+          <span class="legend-item" data-series-key="bench">
             <span class="legend-swatch swatch-bench"></span>
-            <span id="legend-bench-label">S&amp;P 500</span>
+            <span class="legend-label" id="legend-bench-label">S&amp;P 500</span>
             <span class="tnum" id="legend-bench-val"></span>
           </span>
         </div>
@@ -1823,9 +1840,17 @@ const CHART_W = 370;
 const CHART_H = 180;
 
 function normalizeFromStart(arr) {
-  const base = arr[0];
-  if (!base || base === 0) return arr.map(() => 0);
-  return arr.map(v => (v / base - 1) * 100);
+  // Find the first finite value to anchor the % series. Earlier entries
+  // (null/NaN — common when a benchmark doesn't go back as far as the
+  // strategy series, e.g. SPY before its inception) become NaN and are
+  // skipped by the renderer.
+  let base = null;
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (Number.isFinite(v) && v !== 0) { base = v; break; }
+  }
+  if (base == null) return arr.map(() => 0);
+  return arr.map(v => Number.isFinite(v) ? (v / base - 1) * 100 : NaN);
 }
 function sliceToYears(ts, years) {
   const last = ts[ts.length - 1];
@@ -1844,7 +1869,18 @@ function currentBenchLabel() {
 
 function pathFromPoints(pts) {
   if (!pts.length) return '';
-  return pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
+  // Skip NaN/non-finite y-values cleanly (benchmark series may have gaps
+  // before their first data point — e.g. SPY before its inception).
+  // Re-issue 'M' on the first finite point AFTER any non-finite gap so the
+  // line breaks rather than spikes through 0.
+  let out = '';
+  let pendingMove = true;
+  for (const p of pts) {
+    if (!Number.isFinite(p[1])) { pendingMove = true; continue; }
+    out += (pendingMove ? 'M' : 'L') + p[0].toFixed(2) + ',' + p[1].toFixed(2) + ' ';
+    pendingMove = false;
+  }
+  return out.trim();
 }
 function areaFromPoints(pts, yBase) {
   if (!pts.length) return '';
@@ -1860,31 +1896,69 @@ function makeEl(tag, attrs) {
   return el;
 }
 
+// Series visibility — clicking a legend item flips a flag in sessionStorage.
+function isSeriesVisible(seriesKey) {
+  try {
+    return sessionStorage.getItem('legend.' + seriesKey) !== 'hidden';
+  } catch (_) { return true; }
+}
+function setSeriesVisible(seriesKey, visible) {
+  try {
+    if (visible) sessionStorage.removeItem('legend.' + seriesKey);
+    else sessionStorage.setItem('legend.' + seriesKey, 'hidden');
+  } catch (_) {}
+}
+
 function renderChart() {
   if (!eqData) return;
   const svg = $('equity-chart');
   svg.innerHTML = '';
   svg.setAttribute('viewBox', `0 0 ${CHART_W} ${CHART_H}`);
 
-  let ts, line1, bm, seriesLabel;
+  let ts, line1, bm, bmExtras, seriesLabel;
   if (chartView === 'live' && eqData.actual_ts && eqData.actual_ts.length >= 2) {
     ts = eqData.actual_ts;
     line1 = eqData.actual_eq;
     bm = eqData.actual_bm || eqData.actual_eq;
+    bmExtras = (eqData.actual_bm_extras || []).map(e => ({
+      label: e.label, values: e.values,
+    }));
     seriesLabel = 'Actual';
   } else {
     const start = sliceToYears(eqData.ts, chartYears);
     ts = eqData.ts.slice(start);
     line1 = eqData.eq.slice(start);
     bm = eqData.bm.slice(start);
+    bmExtras = (eqData.bm_extras || []).map(e => ({
+      label: e.label,
+      values: e.values.slice(start),
+    }));
     seriesLabel = 'Strategy';
   }
 
   const line1Pct = normalizeFromStart(line1);
   const bmPct = normalizeFromStart(bm);
+  // Normalize each extra benchmark, dropping any leading null values that
+  // would corrupt the % calculation.
+  const extrasPct = bmExtras.map(e => {
+    const cleaned = e.values.map(v => (v == null ? NaN : v));
+    return { label: e.label, values: normalizeFromStart(cleaned) };
+  });
 
-  // Scales
-  const allY = line1Pct.concat(bmPct);
+  // Visibility (read once at start so we don't toggle mid-render).
+  const showStrategy = isSeriesVisible('strategy');
+  const showBench    = isSeriesVisible('bench');
+  const extrasShow   = extrasPct.map((_, i) => isSeriesVisible('bench-' + (i + 1)));
+
+  // Scales — only include visible series in y-extent so a hidden line
+  // doesn't squish everything else.
+  let allY = [];
+  if (showStrategy) allY = allY.concat(line1Pct);
+  if (showBench)    allY = allY.concat(bmPct);
+  extrasPct.forEach((e, i) => { if (extrasShow[i]) allY = allY.concat(e.values); });
+  if (allY.length === 0) allY = line1Pct;  // safety: never let allY be empty
+  allY = allY.filter(v => Number.isFinite(v));
+  if (allY.length === 0) allY = [0];
   const yMin = Math.min(...allY) - 2;
   const yMax = Math.max(...allY) + 2;
   const xMin = ts[0];
@@ -1960,15 +2034,16 @@ function renderChart() {
   const areaId = chartView === 'live' ? 'url(#atActualArea)' : 'url(#atArea)';
   const lineGrad = chartView === 'live' ? 'url(#atActualLine)' : 'url(#atLine)';
 
-  // Area
+  // Area — hidden if Strategy series toggled off
   const area = makeEl('path', {
     d: areaFromPoints(line1Pts, yBase),
     fill: areaId,
     opacity: '0',
+    style: showStrategy ? '' : 'display:none',
   });
   svg.appendChild(area);
 
-  // Bench line (dashed)
+  // Bench line (dashed) — primary
   const benchPath = makeEl('path', {
     d: pathFromPoints(bmPts),
     fill: 'none',
@@ -1976,8 +2051,26 @@ function renderChart() {
     'stroke-width': '1.4',
     'stroke-dasharray': '3 4',
     'stroke-linecap': 'round',
+    style: showBench ? '' : 'display:none',
   });
   svg.appendChild(benchPath);
+
+  // Extra benchmarks — dotted, lighter than primary. Stays a single
+  // visual style across N extras (we only ship 1 extra today).
+  const extraPaths = extrasPct.map((e, i) => {
+    const pts = ts.map((t, idx) => [X(t), Y(e.values[idx])]);
+    const path = makeEl('path', {
+      d: pathFromPoints(pts),
+      fill: 'none',
+      stroke: 'rgba(238,242,246,0.40)',
+      'stroke-width': '1.2',
+      'stroke-dasharray': '1.5 4',
+      'stroke-linecap': 'round',
+      style: extrasShow[i] ? '' : 'display:none',
+    });
+    svg.appendChild(path);
+    return path;
+  });
 
   // Strategy line (gradient)
   const stratPath = makeEl('path', {
@@ -1987,6 +2080,7 @@ function renderChart() {
     'stroke-width': '2.2',
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round',
+    style: showStrategy ? '' : 'display:none',
   });
   svg.appendChild(stratPath);
 
@@ -2042,7 +2136,58 @@ function renderChart() {
   elB.textContent = (lastBench >= 0 ? ' +' : ' ') + lastBench.toFixed(1) + '%';
   elB.style.color = lastBench >= 0 ? 'var(--pos)' : 'var(--neg)';
   $('legend-strategy-label').textContent = seriesLabel;
+
+  // Apply visibility class to existing legend items
+  document.querySelector('.legend-item[data-series-key="strategy"]')
+    .classList.toggle('hidden', !showStrategy);
+  document.querySelector('.legend-item[data-series-key="bench"]')
+    .classList.toggle('hidden', !showBench);
+
+  // Rebuild any extra-benchmark legend items so the count matches the
+  // current series. They live in the legend container after the primary
+  // bench item.
+  const legendContainer = $('chart-legend');
+  // Remove old extras
+  legendContainer.querySelectorAll('.legend-item.extra').forEach(n => n.remove());
+  // Append fresh ones
+  extrasPct.forEach((e, i) => {
+    const seriesKey = 'bench-' + (i + 1);
+    const visible = extrasShow[i];
+    const lastExtra = e.values[e.values.length - 1];
+    const item = document.createElement('span');
+    item.className = 'legend-item extra' + (visible ? '' : ' hidden');
+    item.dataset.seriesKey = seriesKey;
+    const sw = document.createElement('span');
+    sw.className = 'legend-swatch swatch-bench2';
+    const lbl = document.createElement('span');
+    lbl.className = 'legend-label';
+    lbl.textContent = e.label;
+    const val = document.createElement('span');
+    val.className = 'tnum';
+    if (Number.isFinite(lastExtra)) {
+      val.textContent = (lastExtra >= 0 ? ' +' : ' ') + lastExtra.toFixed(1) + '%';
+      val.style.color = lastExtra >= 0 ? 'var(--pos)' : 'var(--neg)';
+    } else {
+      val.textContent = ' —';
+      val.style.color = 'var(--mute)';
+    }
+    item.appendChild(sw);
+    item.appendChild(lbl);
+    item.appendChild(val);
+    legendContainer.appendChild(item);
+  });
 }
+
+// Click a legend item → toggle that series' visibility (persisted in
+// sessionStorage). Delegated handler so dynamically added items work.
+document.addEventListener('click', e => {
+  const item = e.target.closest('.legend-item[data-series-key]');
+  if (!item) return;
+  const key = item.dataset.seriesKey;
+  const nowVisible = !isSeriesVisible(key);  // toggle
+  setSeriesVisible(key, nowVisible);
+  renderChart();  // re-render with new visibility
+});
 
 function getPathLen(pathEl) {
   try { return pathEl.getTotalLength() || 0; } catch (e) { return 0; }
