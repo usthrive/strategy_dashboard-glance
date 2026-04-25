@@ -2280,10 +2280,13 @@ async function loadEquityCurve() {
     if (!eqData.ts || eqData.ts.length < 2) throw new Error('No data');
     $('chart-card').style.display = '';
 
+    // Live/Backtest toggle is shown for ANY strategy whose equity curve
+    // ships actual_ts (i.e. at least one IBKR account's daily NLV history
+    // is present). No strategy-name gating — adding a new strategy just
+    // needs an attached account in strategy_groups.json + 2 days of data.
     const liveBtn = $('live-btn');
     const viewToggle = $('view-toggle');
-    if (eqData.actual_ts && eqData.actual_ts.length >= 2 &&
-        currentStrategy === 'SP500_12_Stage_Strategy') {
+    if (eqData.actual_ts && eqData.actual_ts.length >= 2) {
       liveBtn.style.display = '';
       viewToggle.style.display = '';
     } else {
