@@ -485,14 +485,18 @@
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 14px; gap: 10px;
     }
+    .chart-title-block { min-width: 0; flex: 1 1 auto; }
     .chart-title-block .overline { display: block; margin-bottom: 2px; }
     .chart-title-block .display-sm {
       font-family: var(--font-display);
       font-style: italic;
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1.2;
       letter-spacing: -0.3px;
       color: var(--ink);
+    }
+    @media (min-width: 480px) {
+      .chart-title-block .display-sm { font-size: 20px; }
     }
     .seg {
       display: inline-flex;
@@ -520,7 +524,7 @@
       font-weight: 600;
       box-shadow: var(--shadow-accent);
     }
-    .chart-toolbar { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .chart-toolbar { display: inline-flex; gap: 6px; flex-wrap: nowrap; flex-shrink: 0; justify-content: flex-end; }
     .chart-wrap {
       width: 100%;
       position: relative;
@@ -570,6 +574,7 @@
       color: var(--mute);
       padding-bottom: 6px;
       border-bottom: 1px solid var(--glass-edge);
+      align-self: end;  /* keep underlines aligned even if one header wraps */
     }
     .stats-compare .col-head.right { text-align: right; }
     .stats-compare .row-label {
@@ -1628,8 +1633,12 @@ function renderForStrategy(s, strategyKey) {
   ddEl.classList.remove('pos', 'neg');
   if (ddPct != null && ddPct > 10) ddEl.classList.add('neg');
 
-  // Chart title & legend labels
-  $('chart-title').textContent = `Strategy vs. ${benchLabel}`;
+  // Chart title & legend labels — keep benchLabel ("S&P 500", "Nasdaq-100")
+  // as a single non-breaking unit so it doesn't wrap mid-name.
+  const safeBench = String(benchLabel).replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  $('chart-title').innerHTML =
+    `Strategy vs. <span style="white-space:nowrap">${safeBench}</span>`;
   $('legend-bench-label').textContent = benchLabel;
 
   // Accounts — methodology note uses the strategy's tradable symbol
