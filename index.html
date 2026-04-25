@@ -882,6 +882,7 @@
       <!-- Lifetime stats (Strategy vs Buy & Hold) -->
       <div class="glass section-card fade-in" style="--fi-delay: 780ms;">
         <div class="overline" id="stats-overline">Lifetime stats</div>
+        <div id="view-toggle-container" style="display:none; margin: 0 0 12px 0; gap:6px; flex-wrap:wrap;"></div>
         <div class="stats-compare">
           <div></div>
           <div class="col-head right" id="col-strategy">Strategy</div>
@@ -916,7 +917,7 @@
 <script>
 // ─── Config ─────────────────────────────────────────────────────
 const STATE_URL = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/public_glance.json';
-const SUPABASE_BASE = 'https://mjooqyjofzsavuqqorcg.supabase.co/storage/v1/object/public/dashboard-glance/';
+const SUPABASE_BASE = './';  // LOCAL PREVIEW — serve all equity curve files locally
 const DEFAULT_EQUITY_OBJECT = 'public_equity_curve.json';
 const DEFAULT_STRATEGY = 'SP500_12_Stage_Strategy';
 
@@ -955,11 +956,14 @@ function toTitleCase(str) {
 //   - drops "live" / "paper" tokens (already shown by the status badge)
 //   - renames "ibkr" → "IB"
 //   - uppercases common ticker tokens (QQQ, SPY, SPX, NDX, etc.)
+//   - uppercases short (≤3-char) non-ticker tokens as identifiers (MF, JD, etc.)
 //   - if no ticker token and positions[0] has a symbol, appends it
 //   - title-cases the rest
+// Order: broker, ticker, short codes, words.
 // Examples:
 //   ibkr_live + [SPY]        → "IB SPY"
 //   ibkr_paper_qqq + [QQQ]   → "IB QQQ"  (qqq already in name)
+//   ibkr_live_mf + [SPY]     → "IB SPY MF"
 //   alpaca + [SPY]           → "Alpaca SPY"
 //   alpaca + []              → "Alpaca"
 function formatAccountName(name, positions) {
@@ -967,19 +971,28 @@ function formatAccountName(name, positions) {
     'qqq','spy','spx','ndx','iwm','dia','tlt','gld','uso','efa','vti',
     'upro','tqqq','sso','sqqq',
   ]);
-  const out = [];
-  let hasTicker = false;
+  let broker = null;
+  let tickerFromName = null;
+  const shortCodes = [];
+  const words = [];
   for (const t of String(name).toLowerCase().split('_')) {
     if (!t || t === 'live' || t === 'paper') continue;
-    if (t === 'ibkr') { out.push('IB'); continue; }
-    if (TICKERS.has(t)) { out.push(t.toUpperCase()); hasTicker = true; continue; }
-    out.push(t.charAt(0).toUpperCase() + t.slice(1));
+    if (t === 'ibkr')   { broker = 'IB';     continue; }
+    if (t === 'alpaca') { broker = 'Alpaca'; continue; }
+    if (TICKERS.has(t)) { tickerFromName = t.toUpperCase(); continue; }
+    if (t.length <= 3)  { shortCodes.push(t.toUpperCase()); continue; }
+    words.push(t.charAt(0).toUpperCase() + t.slice(1));
   }
-  if (!hasTicker && Array.isArray(positions) && positions.length > 0) {
+  let ticker = tickerFromName;
+  if (!ticker && Array.isArray(positions) && positions.length > 0) {
     const sym = positions[0] && positions[0].symbol;
-    if (sym) out.push(String(sym).toUpperCase());
+    if (sym) ticker = String(sym).toUpperCase();
   }
-  return out.join(' ');
+  const parts = [];
+  if (broker) parts.push(broker);
+  if (ticker) parts.push(ticker);
+  parts.push(...shortCodes, ...words);
+  return parts.join(' ');
 }
 
 function parseFormatted(str) {
@@ -1076,10 +1089,15 @@ function deriveCyclePhase(s) {
                 (s.catastrophe_stops && s.catastrophe_stops.equity_stop && s.catastrophe_stops.equity_stop.intra_dd_pct) ?? 0;
   const dd = Number(ddRaw) || 0;
   const ytd = (s.pnl_state && s.pnl_state.ytd_return_pct) || 0;
+  // Bars since the last cash-to-long transition. Undefined/null → treat
+  // as "very large" so Accumulation never fires for strategies that
+  // haven't wired up this field yet (e.g. SPX).
+  const barsReentry = (s.bars_since_reentry != null)
+    ? Number(s.bars_since_reentry) : Infinity;
 
   // Wave semantics tie to strategy state (not pure K42), so the wave
   // and the hero always agree. Labels: "Zone · TradeState".
-  //   Accumulation (left)  = reserved (backend-only when K42 is wired)
+  //   Accumulation (left)  = fresh re-entry (first ~10 bars after cash)
   //   Expansion    (l-mid) = long / burst, trend climbing
   //   Peak         (mid)   = first DD appears while still long = topping tell
   //   Distribution (r-mid) = long but pulling back
@@ -1090,6 +1108,15 @@ function deriveCyclePhase(s) {
   if (dd > 12) return { position: 0.70, zone: 'distribution', label: 'Distribution · Long' };
   if (dd > 7)  return { position: 0.62, zone: 'distribution', label: 'Distribution · Long' };
   if (dd > 2)  return { position: 0.54, zone: 'distribution', label: 'Distribution · Long' };
+  // Fresh re-entry: strategy just exited cash within the last 10 bars.
+  // Show Accumulation while the position is being rebuilt. Only applies
+  // when a drawdown hasn't yet developed (otherwise Distribution wins).
+  if (barsReentry >= 0 && barsReentry < 10 && dd <= 2) {
+    const label = lev >= 3
+      ? 'Accumulation · Burst (fresh re-entry)'
+      : 'Accumulation · Long (fresh re-entry)';
+    return { position: 0.15, zone: 'accumulation', label: label };
+  }
   // Cresting threshold at 1% (not 0.5%) so SPX and QQQ views don't diverge
   // from sub-percent DD differences caused by their different volatilities.
   if (dd > 1) return { position: 0.50, zone: 'expansion',
@@ -1327,6 +1354,83 @@ function shortHashFor(key) {
 // ─── Global state ───────────────────────────────────────────────
 let currentState = null;
 let currentStrategy = null;
+let currentView = null;  // when strat has `views`, this is the selected view key
+
+// Per-strategy memory: { strategyKey: viewKey } so the toggle remembers
+// the user's choice when switching strategies and back.
+const savedViews = {};
+
+function applyViewOverride(strat) {
+  // If the strategy defines multiple `views`, overlay the selected view's
+  // fields onto the strategy object so the render code reads the right data.
+  if (!strat || !strat.views) return strat;
+  const savedKey = savedViews[currentStrategy];
+  const candidate = (currentView && strat.views[currentView]) ? currentView
+                  : (savedKey && strat.views[savedKey]) ? savedKey
+                  : (strat.default_view && strat.views[strat.default_view]) ? strat.default_view
+                  : Object.keys(strat.views)[0];
+  currentView = candidate;
+  savedViews[currentStrategy] = candidate;
+  const view = strat.views[candidate];
+  // Shallow clone + field overlay (do NOT mutate original)
+  return Object.assign({}, strat, {
+    headline: view.headline || strat.headline,
+    bench_headline: view.bench_headline || strat.bench_headline,
+    equity_curve_object: view.equity_curve_object || strat.equity_curve_object,
+    benchmark: view.benchmark || strat.benchmark,
+    _active_view: candidate,
+    _active_view_note: view.view_note,
+  });
+}
+
+function renderViewToggle(strat) {
+  const container = document.getElementById('view-toggle-container');
+  if (!container) return;
+  if (!strat || !strat.views || Object.keys(strat.views).length < 2) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.innerHTML = '';
+  Object.entries(strat.views).forEach(([key, v]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = v.view_label || key;
+    btn.dataset.viewKey = key;
+    const active = (key === currentView);
+    btn.style.cssText = [
+      'padding: 6px 12px',
+      'font-size: 0.8rem',
+      'font-family: inherit',
+      'border-radius: 999px',
+      'cursor: pointer',
+      'border: 1px solid ' + (active ? 'rgba(100,181,246,0.7)' : 'rgba(255,255,255,0.12)'),
+      'background: ' + (active ? 'rgba(100,181,246,0.18)' : 'rgba(255,255,255,0.04)'),
+      'color: ' + (active ? '#e2edff' : 'rgba(255,255,255,0.72)'),
+      'font-weight: ' + (active ? '600' : '400'),
+      'transition: all 0.15s ease',
+    ].join(';');
+    btn.addEventListener('click', () => {
+      if (currentView === key) return;
+      currentView = key;
+      savedViews[currentStrategy] = key;
+      // Re-render + reload equity curve
+      if (currentState) {
+        renderForStrategy(currentState, currentStrategy);
+        loadEquityCurve();
+      }
+    });
+    container.appendChild(btn);
+  });
+  // Optional note
+  const viewNote = (strat.views[currentView] || {}).view_note;
+  if (viewNote) {
+    const note = document.createElement('div');
+    note.textContent = viewNote;
+    note.style.cssText = 'flex-basis: 100%; font-size: 0.72rem; color: rgba(255,255,255,0.5); padding-top: 4px;';
+    container.appendChild(note);
+  }
+}
 
 // ─── Load state ─────────────────────────────────────────────────
 async function load() {
@@ -1425,8 +1529,15 @@ async function load() {
 
 // ─── Per-strategy render ────────────────────────────────────────
 function renderForStrategy(s, strategyKey) {
+  const prevStrategy = currentStrategy;
   currentStrategy = strategyKey;
-  const strat = (s.strategies || {})[strategyKey] || {};
+  // Reset view tracking on strategy switch so default_view wins
+  if (prevStrategy !== strategyKey) {
+    currentView = null;
+  }
+  const rawStrat = (s.strategies || {})[strategyKey] || {};
+  const strat = applyViewOverride(rawStrat);
+  renderViewToggle(rawStrat);
   const stratLabel = strat.label || 'SP500 12-Stage Strategy';
 
   // brand-sub may be removed from the header (strategy name shown in the
@@ -1527,9 +1638,17 @@ function renderForStrategy(s, strategyKey) {
 
   // Cycle + commentary — use per-strategy pnl_state + headline so the
   // narrative's DD / YTD / lifetime stats match the numbers box above.
+  // Also override leverage/position/action from the strategy block when
+  // present, so the Market Cycle card shows the selected strategy's state
+  // (NDX can be in cash while SPX is long, etc.).
   const viewState = Object.assign({}, s, {
     pnl_state: strat.pnl_state || s.pnl_state,
     headline: { gspc: h },
+    leverage: (strat.leverage != null) ? strat.leverage : s.leverage,
+    position: (strat.position != null) ? strat.position : s.position,
+    action:   strat.action   || s.action,
+    bars_since_reentry: (strat.bars_since_reentry != null)
+      ? strat.bars_since_reentry : s.bars_since_reentry,
   });
   // Always derive from strategy state so the wave never disagrees with the hero.
   // The backend's s.cycle block (real K42 Kitchin phase) is ignored here — it
@@ -1965,8 +2084,14 @@ $('view-toggle').addEventListener('click', e => {
 async function loadEquityCurve() {
   let objectName = DEFAULT_EQUITY_OBJECT;
   if (currentState && currentStrategy) {
-    const strat = (currentState.strategies || {})[currentStrategy];
-    if (strat && strat.equity_curve_object) objectName = strat.equity_curve_object;
+    const rawStrat = (currentState.strategies || {})[currentStrategy];
+    // If strat has `views` and a view is active, use the view's curve.
+    if (rawStrat && rawStrat.views && currentView && rawStrat.views[currentView]
+        && rawStrat.views[currentView].equity_curve_object) {
+      objectName = rawStrat.views[currentView].equity_curve_object;
+    } else if (rawStrat && rawStrat.equity_curve_object) {
+      objectName = rawStrat.equity_curve_object;
+    }
   }
   try {
     const resp = await fetch(SUPABASE_BASE + objectName, { cache: 'no-store' });
