@@ -404,6 +404,49 @@
     }
     .commentary-details[open] > summary::after { transform: rotate(180deg); }
 
+    /* More periods disclosure on Lifetime Stats — mirrors commentary-details */
+    .more-views-details { margin-top: 14px; }
+    .more-views-details > summary {
+      list-style: none;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 500;
+      padding: 10px 0 4px;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .more-views-details > summary::-webkit-details-marker { display: none; }
+    .more-views-details > summary::after {
+      content: '▾';
+      font-size: 9px;
+      transition: transform 200ms var(--ease);
+    }
+    .more-views-details[open] > summary::after { transform: rotate(180deg); }
+    .more-views-sub {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .more-views-sub .overline { margin-bottom: 6px; }
+    .more-views-sub .sub-note {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: rgba(255,255,255,0.5);
+      margin: 0 0 12px 0;
+    }
+    .view-note-text {
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: rgba(255,255,255,0.62);
+      margin: 0 0 14px 0;
+    }
+
     .commentary-body {
       display: flex;
       flex-direction: column;
@@ -904,7 +947,7 @@
       <!-- Lifetime stats (Strategy vs Buy & Hold) -->
       <div class="glass section-card fade-in" style="--fi-delay: 780ms;">
         <div class="overline" id="stats-overline">Lifetime stats</div>
-        <div id="view-toggle-container" style="display:none; margin: 0 0 12px 0; gap:6px; flex-wrap:wrap;"></div>
+        <div id="view-note-container" class="view-note-text" style="display:none;"></div>
         <div class="stats-compare">
           <div></div>
           <div class="col-head right" id="col-strategy">Strategy</div>
@@ -922,6 +965,10 @@
           <div class="stat-val" id="s-maxdd">—</div>
           <div class="stat-val bnh" id="b-maxdd">—</div>
         </div>
+        <details class="more-views-details" id="more-views-details" style="display:none;">
+          <summary>More periods</summary>
+          <div id="more-views-body"></div>
+        </details>
         <p class="stats-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
       </div>
 
@@ -1406,52 +1453,88 @@ function applyViewOverride(strat) {
 }
 
 function renderViewToggle(strat) {
-  const container = document.getElementById('view-toggle-container');
-  if (!container) return;
-  if (!strat || !strat.views || Object.keys(strat.views).length < 2) {
-    container.style.display = 'none';
-    return;
+  // New design (2026-04-26): instead of toggle buttons that swap which view is
+  // shown, render the *default* view at the top of the lifetime-stats card and
+  // expose all OTHER views as stacked sub-tables inside a "More periods"
+  // disclosure. The default view's stats are populated into the main
+  // .stats-compare grid by the existing render logic; this function:
+  //   1. Renders the default view's view_note in #view-note-container
+  //   2. Populates #more-views-body with sub-tables for the other views
+  const noteContainer = document.getElementById('view-note-container');
+  const moreDetails = document.getElementById('more-views-details');
+  const moreBody = document.getElementById('more-views-body');
+
+  // Reset
+  if (noteContainer) {
+    noteContainer.style.display = 'none';
+    noteContainer.textContent = '';
   }
-  container.style.display = 'flex';
-  container.innerHTML = '';
-  Object.entries(strat.views).forEach(([key, v]) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = v.view_label || key;
-    btn.dataset.viewKey = key;
-    const active = (key === currentView);
-    btn.style.cssText = [
-      'padding: 6px 12px',
-      'font-size: 0.8rem',
-      'font-family: inherit',
-      'border-radius: 999px',
-      'cursor: pointer',
-      'border: 1px solid ' + (active ? 'rgba(100,181,246,0.7)' : 'rgba(255,255,255,0.12)'),
-      'background: ' + (active ? 'rgba(100,181,246,0.18)' : 'rgba(255,255,255,0.04)'),
-      'color: ' + (active ? '#e2edff' : 'rgba(255,255,255,0.72)'),
-      'font-weight: ' + (active ? '600' : '400'),
-      'transition: all 0.15s ease',
-    ].join(';');
-    btn.addEventListener('click', () => {
-      if (currentView === key) return;
-      currentView = key;
-      savedViews[currentStrategy] = key;
-      // Re-render + reload equity curve
-      if (currentState) {
-        renderForStrategy(currentState, currentStrategy);
-        loadEquityCurve();
-      }
-    });
-    container.appendChild(btn);
+  if (moreDetails) moreDetails.style.display = 'none';
+  if (moreBody) moreBody.innerHTML = '';
+
+  if (!strat || !strat.views || Object.keys(strat.views).length < 1) return;
+
+  // 1. Active view's note (the default view that's already populating .stats-compare)
+  const activeView = strat.views[currentView];
+  if (activeView && activeView.view_note && noteContainer) {
+    noteContainer.textContent = activeView.view_note;
+    noteContainer.style.display = 'block';
+  }
+
+  // 2. Other views as stacked sub-tables under "More periods"
+  const otherViews = Object.entries(strat.views).filter(([k]) => k !== currentView);
+  if (otherViews.length === 0 || !moreDetails || !moreBody) return;
+
+  otherViews.forEach(([key, v]) => {
+    const sub = document.createElement('div');
+    sub.className = 'more-views-sub';
+
+    // Period overline header (e.g., "27 YEARS BACKTEST")
+    const headlineKey = v.headline ? Object.keys(v.headline)[0] : null;
+    const h = headlineKey ? (v.headline[headlineKey] || {}) : {};
+    const span = (h.span || '').toString();
+    const headerText = span
+      ? `${span.toUpperCase()} BACKTEST`
+      : (v.view_label || key).toUpperCase();
+    const header = document.createElement('div');
+    header.className = 'overline';
+    header.textContent = headerText;
+    sub.appendChild(header);
+
+    // View note
+    if (v.view_note) {
+      const note = document.createElement('p');
+      note.className = 'sub-note';
+      note.textContent = v.view_note;
+      sub.appendChild(note);
+    }
+
+    // Stats grid (same shape as the main #stats-compare block)
+    const b = v.bench_headline || {};
+    const benchLabel = b.label || 'Buy & Hold';
+    const grid = document.createElement('div');
+    grid.className = 'stats-compare';
+    const cells = [
+      '<div></div>',
+      '<div class="col-head right">Strategy</div>',
+      `<div class="col-head right">${esc(benchLabel)} B&amp;H</div>`,
+      '<div class="row-label">CAGR</div>',
+      `<div class="stat-val">${fmtPct(h.cagr, 1, false)}</div>`,
+      `<div class="stat-val bnh">${fmtPct(b.cagr, 1, false)}</div>`,
+      '<div class="row-label">Sharpe</div>',
+      `<div class="stat-val">${fmtNum(h.sharpe, 2)}</div>`,
+      `<div class="stat-val bnh">${fmtNum(b.sharpe, 2)}</div>`,
+      '<div class="row-label">Max DD</div>',
+      `<div class="stat-val">${fmtPct(Math.abs(Number(h.maxdd)), 1, false)}</div>`,
+      `<div class="stat-val bnh">${fmtPct(Math.abs(Number(b.maxdd)), 1, false)}</div>`,
+    ];
+    grid.innerHTML = cells.join('');
+    sub.appendChild(grid);
+
+    moreBody.appendChild(sub);
   });
-  // Optional note
-  const viewNote = (strat.views[currentView] || {}).view_note;
-  if (viewNote) {
-    const note = document.createElement('div');
-    note.textContent = viewNote;
-    note.style.cssText = 'flex-basis: 100%; font-size: 0.72rem; color: rgba(255,255,255,0.5); padding-top: 4px;';
-    container.appendChild(note);
-  }
+
+  moreDetails.style.display = 'block';
 }
 
 // ─── Load state ─────────────────────────────────────────────────
