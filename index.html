@@ -1999,8 +1999,18 @@ function renderChart() {
   svg.setAttribute('viewBox', `0 0 ${CHART_W} ${CHART_H}`);
 
   let ts, line1, bm, bmExtras, seriesLabel;
+  // labelDates: when set, drives the X-axis tick labels (date formatting).
+  // When ts is an index array (live mode below), labelDates carries the real
+  // timestamps so we can show "Apr 24" instead of "0".
+  let labelDates = null;
   if (chartView === 'live' && eqData.actual_ts && eqData.actual_ts.length >= 2) {
-    ts = eqData.actual_ts;
+    // Live mode: use INDEX-based X-axis so non-trading days (weekends,
+    // holidays) collapse to zero width. Each daily NLV point gets equal
+    // horizontal spacing, the same way every retail stock chart renders
+    // intraday/daily prices. Without this, Friday→Monday is drawn 3× wider
+    // than Mon→Tue, distorting the visual cadence of the live curve.
+    labelDates = eqData.actual_ts;
+    ts = labelDates.map((_, i) => i);
     line1 = eqData.actual_eq;
     bm = eqData.actual_bm || eqData.actual_eq;
     bmExtras = (eqData.actual_bm_extras || []).map(e => ({
@@ -2008,6 +2018,9 @@ function renderChart() {
     }));
     seriesLabel = 'Actual';
   } else {
+    // Backtest mode: stays time-based. Backtest data is weekly Friday closes
+    // (already equally spaced on the calendar), so the time scale matches
+    // the trading-day cadence — no weekend-gap effect to correct.
     const start = sliceToYears(eqData.ts, chartYears);
     ts = eqData.ts.slice(start);
     line1 = eqData.eq.slice(start);
@@ -2094,8 +2107,10 @@ function renderChart() {
     svg.appendChild(lbl);
   });
 
-  // X-axis labels (months every ~N samples)
-  const xLabels = pickXLabels(ts);
+  // X-axis labels (months every ~N samples). When in live mode, ts is an
+  // index array [0..n-1] so we pass labelDates (the real timestamps) to
+  // pickXLabels for date-formatted labels at evenly-spaced indices.
+  const xLabels = pickXLabels(ts, labelDates);
   xLabels.forEach(({ t, label }) => {
     const x = X(t);
     const txt = makeEl('text', {
@@ -2292,13 +2307,20 @@ function niceTicks(min, max, count) {
   return out;
 }
 
-function pickXLabels(ts) {
+function pickXLabels(ts, labelDates) {
+  // ts: x-axis values (timestamps for backtest; integer indices for live).
+  // labelDates: optional parallel array of UTC timestamps used purely for
+  //   formatting tick labels. When provided, we look up labelDates[idx] for
+  //   the date string but place the tick at X(ts[idx]). This is what makes
+  //   index-spaced live charts still show "Apr 24" instead of "3" on the
+  //   x-axis.
   const n = ts.length;
   if (n < 2) return [];
   // Use day-resolution labels ("Apr 13") when the data spans < 6 months;
-  // month-year labels ("Apr 26") otherwise. Prevents collapsing all 4
-  // ticks onto one "Apr 26" when live data spans a few weeks.
-  const spanDays = (ts[n - 1] - ts[0]) / 86400;
+  // month-year labels ("Apr 26") otherwise. Span computed from labelDates
+  // (live mode) or ts (backtest mode).
+  const dateSrc = labelDates || ts;
+  const spanDays = (dateSrc[n - 1] - dateSrc[0]) / 86400;
   const useDayFmt = spanDays < 180;
   const fmt = (sec) => {
     const d = new Date(sec * 1000);
@@ -2315,8 +2337,9 @@ function pickXLabels(ts) {
     const idx = (targetCount === 1)
       ? n - 1
       : Math.round(i * (n - 1) / (targetCount - 1));
-    const t = ts[idx];
-    const label = fmt(t);
+    const t = ts[idx];                         // x-position value
+    const labelTime = dateSrc[idx];            // date for label formatting
+    const label = fmt(labelTime);
     if (seen.has(label)) continue;  // dedupe duplicates
     seen.add(label);
     out.push({ t, label });
