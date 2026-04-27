@@ -973,11 +973,11 @@
           <div class="stat-val" id="s-maxdd">—</div>
           <div class="stat-val bnh" id="b-maxdd">—</div>
         </div>
+        <p class="stats-note" id="view-context-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
         <details class="more-views-details" id="more-views-details" style="display:none;">
           <summary>More periods</summary>
           <div id="more-views-body"></div>
         </details>
-        <p class="stats-note" id="view-context-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
       </div>
 
       <!-- Accounts -->
@@ -1490,14 +1490,12 @@ function renderViewToggle(strat) {
     return;
   }
 
-  // 1. Active view's note (the default view that's already populating .stats-compare)
+  // 1. Active view's narrative is communicated through the context_note
+  //    paragraph immediately below the metrics grid. The top
+  //    #view-note-container is intentionally left hidden for active tabs to
+  //    avoid duplicating with context_note. (Sub-tables under "More periods"
+  //    still render their own view_note inline — see below.)
   const activeView = strat.views[currentView];
-  if (activeView && activeView.view_note && noteContainer) {
-    noteContainer.textContent = activeView.view_note;
-    noteContainer.style.display = 'block';
-  }
-
-  // 2. Active view's context_note (footer paragraph), with fallback
   if (ctxNoteEl) {
     ctxNoteEl.textContent = (activeView && activeView.context_note) || DEFAULT_CONTEXT_NOTE;
   }
