@@ -654,6 +654,14 @@
       text-align: right;
     }
     .stats-compare .stat-val.bnh { color: var(--mute); }
+    .stats-compare .stat-range {
+      font-size: 0.6em;
+      font-weight: 400;
+      color: var(--mute);
+      margin-left: 0.5em;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
     .stats-note {
       font-size: 11px;
       line-height: 1.55;
@@ -969,7 +977,7 @@
           <summary>More periods</summary>
           <div id="more-views-body"></div>
         </details>
-        <p class="stats-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
+        <p class="stats-note" id="view-context-note">The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.</p>
       </div>
 
       <!-- Accounts -->
@@ -1459,10 +1467,14 @@ function renderViewToggle(strat) {
   // disclosure. The default view's stats are populated into the main
   // .stats-compare grid by the existing render logic; this function:
   //   1. Renders the default view's view_note in #view-note-container
-  //   2. Populates #more-views-body with sub-tables for the other views
+  //   2. Renders the active view's context_note (or fallback) in #view-context-note
+  //   3. Populates #more-views-body with sub-tables for the other views
   const noteContainer = document.getElementById('view-note-container');
+  const ctxNoteEl = document.getElementById('view-context-note');
   const moreDetails = document.getElementById('more-views-details');
   const moreBody = document.getElementById('more-views-body');
+
+  const DEFAULT_CONTEXT_NOTE = "The design prioritizes capturing the large moves when trend and momentum agree, and stepping aside when they don't. The biggest gains compound in the boring middle of long trends.";
 
   // Reset
   if (noteContainer) {
@@ -1472,13 +1484,22 @@ function renderViewToggle(strat) {
   if (moreDetails) moreDetails.style.display = 'none';
   if (moreBody) moreBody.innerHTML = '';
 
-  if (!strat || !strat.views || Object.keys(strat.views).length < 1) return;
+  // For strategies without views (or before view resolution): use default footer.
+  if (!strat || !strat.views || Object.keys(strat.views).length < 1) {
+    if (ctxNoteEl) ctxNoteEl.textContent = DEFAULT_CONTEXT_NOTE;
+    return;
+  }
 
   // 1. Active view's note (the default view that's already populating .stats-compare)
   const activeView = strat.views[currentView];
   if (activeView && activeView.view_note && noteContainer) {
     noteContainer.textContent = activeView.view_note;
     noteContainer.style.display = 'block';
+  }
+
+  // 2. Active view's context_note (footer paragraph), with fallback
+  if (ctxNoteEl) {
+    ctxNoteEl.textContent = (activeView && activeView.context_note) || DEFAULT_CONTEXT_NOTE;
   }
 
   // 2. Other views as stacked sub-tables under "More periods"
@@ -1676,10 +1697,33 @@ function renderForStrategy(s, strategyKey) {
   const benchLabel = ms.bench_label || (strat.benchmark && strat.benchmark.label) || 'S&P 500';
   const benchClose = (ms.bench_close != null) ? ms.bench_close : ms.gspc_close;
 
-  // Strategy stats (left column)
-  animateCount($('s-cagr'),   h.cagr   != null ? fmtPct(h.cagr, 1, false)    : '—', 1100, 720);
-  animateCount($('s-sharpe'), h.sharpe != null ? fmtNum(h.sharpe, 2)         : '—', 1100, 770);
-  animateCount($('s-maxdd'),  h.maxdd  != null ? fmtPct(Math.abs(h.maxdd), 1, false) : '—', 1100, 820);
+  // Strategy stats (left column).
+  // If the active view supplies *_range / *_worst fields (e.g. typical_10yr),
+  // render the headline value with a small inline range suffix instead of
+  // animating. The range markup uses .stat-range styled by stats-compare CSS.
+  function _renderStat(elId, value, formatter, rangeSuffix, delay) {
+    const el = $(elId);
+    if (!el) return;
+    if (rangeSuffix) {
+      const valStr = (value != null) ? formatter(value) : '—';
+      el.innerHTML = esc(valStr) + '<span class="stat-range">' + esc(rangeSuffix) + '</span>';
+    } else {
+      animateCount(el, value != null ? formatter(value) : '—', 1100, delay);
+    }
+  }
+  const cagrRange = (Array.isArray(h.cagr_range) && h.cagr_range.length === 2)
+    ? `(${h.cagr_range[0]}\u2013${h.cagr_range[1]}%)`
+    : null;
+  const sharpeRange = (Array.isArray(h.sharpe_range) && h.sharpe_range.length === 2)
+    ? `(${h.sharpe_range[0]}\u2013${h.sharpe_range[1]})`
+    : null;
+  const maxddRangeSuffix = (h.maxdd_worst != null)
+    ? `(worst ${h.maxdd_worst}%)`
+    : null;
+
+  _renderStat('s-cagr',   h.cagr,   v => fmtPct(v, 1, false),                   cagrRange,   720);
+  _renderStat('s-sharpe', h.sharpe, v => fmtNum(v, 2),                          sharpeRange, 770);
+  _renderStat('s-maxdd',  h.maxdd != null ? Math.abs(h.maxdd) : null, v => fmtPct(v, 1, false), maxddRangeSuffix, 820);
 
   // Buy & Hold benchmark stats (right column). Mirror the strategy-headline
   // fallback so spans match: when we fell back to top-level headline
@@ -1688,9 +1732,21 @@ function renderForStrategy(s, strategyKey) {
   const bh = usedTopLevelHeadline
     ? (s.bench_headline || {})
     : ((strat && strat.bench_headline) || s.bench_headline || {});
-  animateCount($('b-cagr'),   bh.cagr   != null ? fmtPct(bh.cagr, 1, false)    : '—', 1100, 740);
-  animateCount($('b-sharpe'), bh.sharpe != null ? fmtNum(bh.sharpe, 2)         : '—', 1100, 790);
-  animateCount($('b-maxdd'),  bh.maxdd  != null ? fmtPct(Math.abs(bh.maxdd), 1, false) : '—', 1100, 840);
+
+  // Same range-aware rendering for the benchmark column (parallel to _renderStat above).
+  // For typical_10yr views, bench shows median + p25/p75 range or worst-ever marker.
+  const bhCagrRange = (Array.isArray(bh.cagr_range) && bh.cagr_range.length === 2)
+    ? `(${bh.cagr_range[0]}\u2013${bh.cagr_range[1]}%)`
+    : null;
+  const bhSharpeRange = (Array.isArray(bh.sharpe_range) && bh.sharpe_range.length === 2)
+    ? `(${bh.sharpe_range[0]}\u2013${bh.sharpe_range[1]})`
+    : null;
+  const bhMaxddRange = (bh.maxdd_worst != null)
+    ? `(worst ${Math.abs(bh.maxdd_worst)}%)`
+    : null;
+  _renderStat('b-cagr',   bh.cagr,   v => fmtPct(v, 1, false),                   bhCagrRange,   740);
+  _renderStat('b-sharpe', bh.sharpe, v => fmtNum(v, 2),                          bhSharpeRange, 790);
+  _renderStat('b-maxdd',  bh.maxdd != null ? Math.abs(bh.maxdd) : null, v => fmtPct(v, 1, false), bhMaxddRange,  840);
 
   // Column header + overline span: show span if available.
   // Prefer the bench_headline's own label (set by the backend to the
