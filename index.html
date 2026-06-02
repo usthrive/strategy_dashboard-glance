@@ -1155,6 +1155,69 @@ function detectLeverageChange(s) {
   return { text, positive };
 }
 
+// ─── Hero (terminal-style POSITION readout) ─────────────────────
+// Renders the big "LONG_HOLD_" / "CASH_(4_DAYS)_" label, the leverage
+// stat, and the STATUS/CHANGE row. Called on initial load AND on
+// strategy-switch so the hero updates when the user picks S2/S3/S4
+// from the dropdown.
+//
+// Field priority (most-semantic first, falls back gracefully for
+// older glance payloads that pre-date 2026-06-02):
+//   1. strat.position_status — e.g. "LONG 3× TQQQ @ 1.30× margin → 3.90× NDX"
+//   2. fallback: old "LONG HOLD"/"CASH HOLD" derived from action.action + leverage
+//
+// Leverage priority:
+//   1. strat.effective_index_leverage — accounts for S4's 1.30× margin overlay
+//   2. fallback: strat.leverage or s.leverage (engine ETF tier only)
+function renderHero(s, asOf, strategyKey) {
+  // Prefer per-strategy fields when available (set by publish_state's
+  // _build_strategies_map per-group state-file loader). Fall back to the
+  // top-level state for older payloads or the default-strategy view.
+  const strat = (s.strategies || {})[strategyKey] || {};
+  const action = (strat.action && strat.action.action) || (s.action && s.action.action) || 'UNKNOWN';
+  const lev = strat.leverage != null ? strat.leverage : (s.leverage != null ? s.leverage : '?');
+
+  // Display label: prefer the semantic position_status, else compute the
+  // old action+lev label so the page still works against an older glance.
+  let displayAction;
+  const semanticLabel = strat.position_status || s.position_status;
+  if (semanticLabel) {
+    displayAction = semanticLabel;
+  } else if (action === 'HOLD') {
+    displayAction = lev > 0 ? 'LONG HOLD' : 'CASH HOLD';
+  } else if (action === 'BUY') displayAction = 'BUY';
+  else if (action === 'SELL') displayAction = 'SELL';
+  else if (action === 'ADJUST') displayAction = 'ADJUST';
+  else displayAction = action.toUpperCase().replace(/_/g, ' ');
+
+  $('signal-meta').textContent = `POSITION · AS OF CLOSE ${asOf}`;
+  // Terminal readout: spaces → underscores, trailing _ is the blinking caret.
+  $('signal-label').textContent = displayAction.replace(/ /g, '_');
+
+  // Leverage display: prefer effective_index_leverage (3.9× for S4 v3.2 @
+  // 1.30× margin) over the raw engine ETF tier (3.0). Falls back cleanly.
+  const effLev = strat.effective_index_leverage != null
+    ? strat.effective_index_leverage
+    : (s.effective_index_leverage != null ? s.effective_index_leverage : lev);
+  $('signal-leverage').textContent = `${effLev}×`;
+
+  // Change / status row
+  const change = detectLeverageChange(strat.action ? strat : s);
+  const statusLabel = $('signal-status-label');
+  const statusValue = $('signal-status-value');
+  statusValue.classList.remove('kv-faint', 'kv-gold', 'kv-neg');
+  if (change) {
+    statusLabel.textContent = 'CHANGE';
+    statusValue.textContent = change.text;
+    if (change.positive === true) statusValue.classList.add('kv-gold');
+    else if (change.positive === false) statusValue.classList.add('kv-neg');
+  } else {
+    statusLabel.textContent = 'STATUS';
+    statusValue.textContent = 'NO CHANGE';
+    statusValue.classList.add('kv-faint');
+  }
+}
+
 // ─── Cycle phase derivation ─────────────────────────────────────
 // Intentionally coarse and qualitative. No cycle lengths, percentages,
 // or step counts are surfaced to the UI — only a pointer position (0-1),
@@ -1598,38 +1661,7 @@ async function load() {
     if (select.querySelector(`option[value="${initialKey}"]`)) select.value = initialKey;
 
     renderForStrategy(s, initialKey);
-
-    // Hero — terminal-style signal readout
-    const action = (s.action && s.action.action) || 'UNKNOWN';
-    const lev = s.leverage != null ? s.leverage : '?';
-
-    let displayAction;
-    if (action === 'HOLD') displayAction = lev > 0 ? 'LONG HOLD' : 'CASH HOLD';
-    else if (action === 'BUY') displayAction = 'BUY';
-    else if (action === 'SELL') displayAction = 'SELL';
-    else if (action === 'ADJUST') displayAction = 'ADJUST';
-    else displayAction = action.toUpperCase().replace(/_/g, ' ');
-
-    $('signal-meta').textContent = `POSITION · AS OF CLOSE ${asOf}`;
-    // Terminal readout: spaces → underscores, trailing _ is the blinking caret.
-    $('signal-label').textContent = displayAction.replace(/ /g, '_');
-    $('signal-leverage').textContent = `${lev}×`;
-
-    // Change / status row
-    const change = detectLeverageChange(s);
-    const statusLabel = $('signal-status-label');
-    const statusValue = $('signal-status-value');
-    statusValue.classList.remove('kv-faint', 'kv-gold', 'kv-neg');
-    if (change) {
-      statusLabel.textContent = 'CHANGE';
-      statusValue.textContent = change.text;
-      if (change.positive === true) statusValue.classList.add('kv-gold');
-      else if (change.positive === false) statusValue.classList.add('kv-neg');
-    } else {
-      statusLabel.textContent = 'STATUS';
-      statusValue.textContent = 'NO CHANGE';
-      statusValue.classList.add('kv-faint');
-    }
+    renderHero(s, asOf, initialKey);
 
     // bars_since_entry is the live-trade duration, not a lifetime stat —
     // it lives in the hero/meta context (not Lifetime Stats anymore).
@@ -1950,7 +1982,13 @@ function collapseCommentaryDetails() {
 }
 $('strategy-select').addEventListener('change', e => {
   collapseCommentaryDetails();
-  if (currentState) renderForStrategy(currentState, e.target.value);
+  if (currentState) {
+    renderForStrategy(currentState, e.target.value);
+    // Re-render hero with the newly-selected strategy's per-strategy fields
+    // (position_status / effective_index_leverage / etc.) so the big label
+    // and leverage number reflect the chosen strategy, not the default.
+    renderHero(currentState, currentState.as_of_date, e.target.value);
+  }
 });
 window.addEventListener('hashchange', () => {
   const k = getStrategyFromHash();
@@ -1958,6 +1996,7 @@ window.addEventListener('hashchange', () => {
     collapseCommentaryDetails();
     $('strategy-select').value = k;
     renderForStrategy(currentState, k);
+    renderHero(currentState, currentState.as_of_date, k);
   }
 });
 
