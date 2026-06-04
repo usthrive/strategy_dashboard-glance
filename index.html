@@ -933,6 +933,10 @@
               <button type="button" data-years="3">3Y</button>
               <button type="button" data-years="5">5Y</button>
             </div>
+            <div class="seg" id="scale-toggle" title="Linear or logarithmic Y-axis">
+              <button type="button" class="active" data-scale="linear">Lin</button>
+              <button type="button" data-scale="log">Log</button>
+            </div>
           </div>
         </div>
         <div class="chart-wrap">
@@ -2009,6 +2013,7 @@ setInterval(load, 5 * 60 * 1000);
 let eqData = null;
 let chartView = 'backtest';
 let chartYears = 1;
+let chartScale = 'linear';   // 'linear' | 'log' — Y-axis scale for the perf chart
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CHART_PAD = { l: 30, r: 22, t: 14, b: 26 };
@@ -2125,13 +2130,24 @@ function renderChart() {
     seriesLabel = 'Strategy';
   }
 
-  const line1Pct = normalizeFromStart(line1);
-  const bmPct = normalizeFromStart(bm);
+  // Y-axis scale: linear plots % return directly; log plots log10(growth
+  // multiple) = log10(1 + pct/100), so a leveraged curve that ends +1800%
+  // doesn't squash the benchmark to a flat line. Guard the multiple > 0.
+  const _sc = v => {
+    if (!Number.isFinite(v)) return NaN;
+    return chartScale === 'log' ? Math.log10(Math.max(1e-6, 1 + v / 100)) : v;
+  };
+  // Keep RAW % (for the legend's trailing-return text) and SCALED (for plotting).
+  const line1Raw = normalizeFromStart(line1);
+  const bmRaw = normalizeFromStart(bm);
+  const line1Pct = line1Raw.map(_sc);
+  const bmPct = bmRaw.map(_sc);
   // Normalize each extra benchmark, dropping any leading null values that
   // would corrupt the % calculation.
   const extrasPct = bmExtras.map(e => {
     const cleaned = e.values.map(v => (v == null ? NaN : v));
-    return { label: e.label, values: normalizeFromStart(cleaned) };
+    const raw = normalizeFromStart(cleaned);
+    return { label: e.label, values: raw.map(_sc), raw };
   });
 
   // Visibility (read once at start so we don't toggle mid-render).
@@ -2148,8 +2164,12 @@ function renderChart() {
   if (allY.length === 0) allY = line1Pct;  // safety: never let allY be empty
   allY = allY.filter(v => Number.isFinite(v));
   if (allY.length === 0) allY = [0];
-  const yMin = Math.min(...allY) - 2;
-  const yMax = Math.max(...allY) + 2;
+  // Padding: ±2% in linear mode; in log mode use a small fraction of the
+  // log-range (±2 in log-space would be ×100 of empty padding).
+  const _yLo = Math.min(...allY), _yHi = Math.max(...allY);
+  const _pad = chartScale === 'log' ? Math.max(0.04, (_yHi - _yLo) * 0.08) : 2;
+  const yMin = _yLo - _pad;
+  const yMax = _yHi + _pad;
   const xMin = ts[0];
   const xMax = ts[ts.length - 1];
 
@@ -2196,7 +2216,12 @@ function renderChart() {
       'font-size': '9',
       fill: 'rgba(238,242,246,0.25)',
     });
-    lbl.textContent = (v >= 0 ? '' : '') + v.toFixed(0) + '%';
+    if (chartScale === 'log') {
+      const mult = Math.pow(10, v);
+      lbl.textContent = (mult >= 10 ? mult.toFixed(0) : mult.toFixed(1)) + '×';
+    } else {
+      lbl.textContent = v.toFixed(0) + '%';
+    }
     svg.appendChild(lbl);
   });
 
@@ -2317,9 +2342,9 @@ function renderChart() {
     });
   }
 
-  // Legend values (trailing returns)
-  const lastStrat = line1Pct[line1Pct.length - 1];
-  const lastBench = bmPct[bmPct.length - 1];
+  // Legend values (trailing returns) — always the REAL %, regardless of axis scale.
+  const lastStrat = line1Raw[line1Raw.length - 1];
+  const lastBench = bmRaw[bmRaw.length - 1];
   const elS = $('legend-strategy-val');
   const elB = $('legend-bench-val');
   elS.textContent = (lastStrat >= 0 ? ' +' : ' ') + lastStrat.toFixed(1) + '%';
@@ -2344,7 +2369,7 @@ function renderChart() {
   extrasPct.forEach((e, i) => {
     const seriesKey = 'bench-' + (i + 1);
     const visible = extrasShow[i];
-    const lastExtra = e.values[e.values.length - 1];
+    const lastExtra = e.raw[e.raw.length - 1];
     const item = document.createElement('span');
     item.className = 'legend-item extra' + (visible ? '' : ' hidden');
     item.dataset.seriesKey = seriesKey;
@@ -2457,6 +2482,14 @@ $('view-toggle').addEventListener('click', e => {
   chartView = btn.dataset.view;
   $('yr-toggle').style.opacity = chartView === 'live' ? '0.3' : '1';
   $('yr-toggle').style.pointerEvents = chartView === 'live' ? 'none' : 'auto';
+  renderChart();
+});
+$('scale-toggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-scale]');
+  if (!btn) return;
+  $('scale-toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartScale = btn.dataset.scale;
   renderChart();
 });
 
