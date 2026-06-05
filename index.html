@@ -577,6 +577,44 @@
       height: auto;
       display: block;
     }
+    /* Crosshair tooltip — date + per-series value at the cursor's x-position.
+       Hidden by default; renderChart() shows it on pointer-over the SVG. */
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      background: rgba(13, 19, 28, 0.92);
+      border: 1px solid rgba(238, 242, 246, 0.10);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 10px;
+      line-height: 1.5;
+      color: var(--ink);
+      white-space: nowrap;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      z-index: 6;
+      transition: opacity 90ms var(--ease);
+    }
+    .chart-tooltip .tt-date {
+      color: var(--mute);
+      margin-bottom: 4px;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .chart-tooltip .tt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .chart-tooltip .tt-row .tt-label {
+      color: var(--mute);
+    }
+    .chart-tooltip .tt-row .tt-val {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
     .chart-legend {
       display: flex;
       justify-content: space-between;
@@ -941,6 +979,7 @@
         </div>
         <div class="chart-wrap">
           <svg id="equity-chart" viewBox="0 0 370 180" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div id="chart-tooltip" class="chart-tooltip" role="tooltip" aria-hidden="true"></div>
         </div>
         <div class="chart-legend" id="chart-legend">
           <span class="legend-item" data-series-key="strategy">
@@ -2392,6 +2431,151 @@ function renderChart() {
     item.appendChild(val);
     legendContainer.appendChild(item);
   });
+
+  // ─── Crosshair hover ─────────────────────────────────────────────
+  // Vertical guide line + per-series dots + date/value tooltip that
+  // tracks the cursor. Works for both mouse and touch. Uses the RAW
+  // percent values (line1Raw/bmRaw/extras.raw) so the readout is in
+  // honest % return regardless of the linear/log Y-axis toggle.
+  const guide = makeEl('line', {
+    x1: 0, x2: 0, y1: CHART_PAD.t, y2: CHART_H - CHART_PAD.b,
+    stroke: 'rgba(214, 189, 138, 0.55)',
+    'stroke-width': 0.7,
+    'stroke-dasharray': '2 3',
+    'pointer-events': 'none',
+    style: 'display:none',
+  });
+  svg.appendChild(guide);
+  const dotS  = makeEl('circle', { cx: 0, cy: 0, r: 2.6, fill: '#D6BD8A', stroke: '#0D131C', 'stroke-width': 0.8, 'pointer-events': 'none', style: 'display:none' });
+  const dotB  = makeEl('circle', { cx: 0, cy: 0, r: 2.2, fill: '#EEF2F6', stroke: '#0D131C', 'stroke-width': 0.8, 'pointer-events': 'none', style: 'display:none' });
+  svg.appendChild(dotS); svg.appendChild(dotB);
+  const dotsExtra = extrasPct.map(() => {
+    const c = makeEl('circle', { cx: 0, cy: 0, r: 2.0, fill: '#8AA4FF', stroke: '#0D131C', 'stroke-width': 0.8, 'pointer-events': 'none', style: 'display:none' });
+    svg.appendChild(c);
+    return c;
+  });
+  // Transparent overlay rect — receives the pointer events. Placed last so
+  // it's the topmost element; pointer-events: all overrides aria-hidden.
+  const hot = makeEl('rect', {
+    x: CHART_PAD.l, y: CHART_PAD.t,
+    width: innerW, height: innerH,
+    fill: 'transparent',
+    'pointer-events': 'all',
+    style: 'cursor: crosshair;',
+  });
+  svg.appendChild(hot);
+
+  const tooltipEl = document.getElementById('chart-tooltip');
+  if (tooltipEl) tooltipEl.style.display = 'none';
+
+  // labelDates is set in live mode (real ts is integer indices); in backtest
+  // mode ts itself is unix-seconds. Pick the right source for date display.
+  const dateSrc = labelDates || ts;
+
+  const fmtDate = (sec) => {
+    const d = new Date(sec * 1000);
+    return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  const fmtPct = (v) => {
+    if (!Number.isFinite(v)) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  };
+
+  const onMove = (clientX) => {
+    const rect = svg.getBoundingClientRect();
+    // SVG uses preserveAspectRatio="none" so x maps linearly. Convert client
+    // x → svg-viewport x.
+    const svgX = ((clientX - rect.left) / rect.width) * CHART_W;
+    // Find nearest index by ts (which is already mapped through X(); but
+    // it's easier to invert: find i such that X(ts[i]) closest to svgX).
+    // Bisect since ts is monotonic.
+    let lo = 0, hi = ts.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (X(ts[mid]) < svgX) lo = mid; else hi = mid;
+    }
+    const idx = (svgX - X(ts[lo]) <= X(ts[hi]) - svgX) ? lo : hi;
+
+    const xPx = X(ts[idx]);
+    guide.setAttribute('x1', xPx); guide.setAttribute('x2', xPx);
+    guide.style.display = '';
+
+    // Strategy dot — hide if series toggled off or value not finite
+    const sy = Y(line1Pct[idx]);
+    if (showStrategy && Number.isFinite(sy)) {
+      dotS.setAttribute('cx', xPx); dotS.setAttribute('cy', sy);
+      dotS.style.display = '';
+    } else { dotS.style.display = 'none'; }
+    const by = Y(bmPct[idx]);
+    if (showBench && Number.isFinite(by)) {
+      dotB.setAttribute('cx', xPx); dotB.setAttribute('cy', by);
+      dotB.style.display = '';
+    } else { dotB.style.display = 'none'; }
+    dotsExtra.forEach((d, i) => {
+      const ey = Y(extrasPct[i].values[idx]);
+      if (extrasShow[i] && Number.isFinite(ey)) {
+        d.setAttribute('cx', xPx); d.setAttribute('cy', ey);
+        d.style.display = '';
+      } else { d.style.display = 'none'; }
+    });
+
+    // Tooltip text + position. The tooltip sits inside .chart-wrap which
+    // is position:relative, so we use offset-from-wrap pixels. Mirror to
+    // left side when near the right edge so it never clips.
+    if (tooltipEl) {
+      const dateStr = fmtDate(dateSrc[idx]);
+      const rows = [];
+      rows.push(`<div class="tt-date">${dateStr}</div>`);
+      if (showStrategy) rows.push(
+        `<div class="tt-row"><span class="tt-label">${seriesLabel}</span><span class="tt-val" style="color:#D6BD8A">${fmtPct(line1Raw[idx])}</span></div>`
+      );
+      if (showBench) rows.push(
+        `<div class="tt-row"><span class="tt-label">${(eqData && eqData.benchmark_label) || 'Benchmark'}</span><span class="tt-val" style="color:#EEF2F6">${fmtPct(bmRaw[idx])}</span></div>`
+      );
+      extrasPct.forEach((e, i) => {
+        if (extrasShow[i]) rows.push(
+          `<div class="tt-row"><span class="tt-label">${e.label}</span><span class="tt-val" style="color:#8AA4FF">${fmtPct(e.raw[idx])}</span></div>`
+        );
+      });
+      tooltipEl.innerHTML = rows.join('');
+      tooltipEl.style.display = 'block';
+      tooltipEl.setAttribute('aria-hidden', 'false');
+      // Position: clamp inside the wrap so it never goes off-screen.
+      const wrapRect = svg.parentNode.getBoundingClientRect();
+      const xRatio = xPx / CHART_W;
+      const ttW = tooltipEl.offsetWidth;
+      const ttH = tooltipEl.offsetHeight;
+      let leftPx = xRatio * wrapRect.width + 10;
+      if (leftPx + ttW > wrapRect.width - 4) leftPx = xRatio * wrapRect.width - ttW - 10;
+      if (leftPx < 4) leftPx = 4;
+      tooltipEl.style.left = leftPx + 'px';
+      tooltipEl.style.top = '6px';
+    }
+  };
+
+  const hideAll = () => {
+    guide.style.display = 'none';
+    dotS.style.display = 'none';
+    dotB.style.display = 'none';
+    dotsExtra.forEach(d => d.style.display = 'none');
+    if (tooltipEl) { tooltipEl.style.display = 'none'; tooltipEl.setAttribute('aria-hidden', 'true'); }
+  };
+
+  hot.addEventListener('mousemove', e => onMove(e.clientX));
+  hot.addEventListener('mouseleave', hideAll);
+  hot.addEventListener('touchstart', e => {
+    if (e.touches && e.touches.length) {
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    }
+  }, { passive: false });
+  hot.addEventListener('touchmove', e => {
+    if (e.touches && e.touches.length) {
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    }
+  }, { passive: false });
+  hot.addEventListener('touchend', hideAll);
 }
 
 // Click a legend item → toggle that series' visibility (persisted in
