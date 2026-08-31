@@ -838,6 +838,72 @@
     @media (min-width: 600px) {
       .container { max-width: 460px; }
     }
+    /* ─── Portfolio Overview (landing view) ──────────────────────── */
+    .ov-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .ov-strip-num {
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+    }
+    #ov-cards { display: flex; flex-direction: column; gap: 12px; }
+    .ov-card {
+      position: relative;
+      padding: 14px 16px 12px 18px;
+      cursor: pointer;
+      transition: transform 0.15s var(--ease);
+    }
+    .ov-card:active { transform: scale(0.985); }
+    .ov-card::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 12px; bottom: 12px;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--ov-color, var(--accent));
+    }
+    .ov-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .ov-card-name { font-size: 13.5px; font-weight: 600; }
+    .ov-chip {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 1.2px;
+      padding: 2px 8px;
+      border-radius: var(--radius-chip);
+      border: 1px solid var(--glass-edge);
+      color: var(--mute);
+      white-space: nowrap;
+    }
+    .ov-chip.live  { color: var(--pos); border-color: rgba(126,216,168,0.35); background: rgba(126,216,168,0.08); }
+    .ov-chip.paper { color: var(--accent); border-color: rgba(138,164,255,0.35); background: rgba(138,164,255,0.08); }
+    .ov-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .ov-metric-num { font-family: var(--font-mono); font-size: 13px; }
+    .ov-sub {
+      font-size: 10.5px;
+      color: var(--mute);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .ov-spark { width: 100%; height: 30px; margin-top: 8px; display: block; }
+    .legend-item.ov-off { opacity: 0.3; }
+    .legend-item.ov-toggle { cursor: pointer; user-select: none; }
+    .pos-t { color: var(--pos); }
+    .neg-t { color: var(--neg); }
   </style>
 </head>
 <body>
@@ -861,7 +927,75 @@
       <select id="strategy-select"></select>
     </div>
 
-    <div class="stack">
+    <!-- ─── Portfolio Overview (landing view, added 2026-08-31) ─────── -->
+    <div class="stack" id="overview-stack" style="display: none;">
+
+      <div class="glass section-card fade-in" style="--fi-delay: 120ms;">
+        <div class="overline">Portfolio <span class="overline-asof" id="ov-asof"></span></div>
+        <div class="ov-strip">
+          <div class="ov-strip-cell">
+            <div class="ov-strip-num tnum" id="ov-live-total">—</div>
+            <div class="metric-sub" id="ov-live-sub">Live capital</div>
+          </div>
+          <div class="ov-strip-cell">
+            <div class="ov-strip-num tnum" id="ov-yday">—</div>
+            <div class="metric-sub">Yesterday</div>
+          </div>
+          <div class="ov-strip-cell">
+            <div class="ov-strip-num tnum" id="ov-count">—</div>
+            <div class="metric-sub" id="ov-count-sub">Strategies</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ov-cards"></div>
+
+      <div class="glass chart-card fade-in" style="--fi-delay: 300ms;">
+        <div class="chart-head-row">
+          <div class="chart-title-block">
+            <span class="overline">Race View</span>
+            <div class="display-sm">All strategies, rebased to 100</div>
+          </div>
+          <div class="chart-toolbar">
+            <div class="seg" id="ov-window-toggle">
+              <button type="button" data-win="0.25">3M</button>
+              <button type="button" class="active" data-win="1">1Y</button>
+              <button type="button" data-win="5">5Y</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <svg id="ov-race" viewBox="0 0 370 190" preserveAspectRatio="none" aria-hidden="true"></svg>
+        </div>
+        <div class="chart-legend" id="ov-race-legend"></div>
+        <p class="stats-note" style="margin-top: 6px;">Certified strategy curves, weekly resolution. Tap a name to show or hide it.</p>
+      </div>
+
+      <div class="glass chart-card fade-in" style="--fi-delay: 380ms;">
+        <div class="chart-title-block">
+          <span class="overline">Risk vs Return · last 5 years</span>
+          <div class="display-sm">Up and left is better</div>
+        </div>
+        <div class="chart-wrap">
+          <svg id="ov-map" viewBox="0 0 370 210" aria-hidden="true"></svg>
+        </div>
+        <p class="stats-note" style="margin-top: 6px;">Yearly return vs deepest decline over the same five years, strategies beside their indexes.</p>
+      </div>
+
+      <div class="glass chart-card fade-in" style="--fi-delay: 460ms;">
+        <div class="chart-title-block">
+          <span class="overline">Window Returns</span>
+          <div class="display-sm">Recent performance by period</div>
+        </div>
+        <div class="chart-wrap">
+          <svg id="ov-bars" viewBox="0 0 370 200" aria-hidden="true"></svg>
+        </div>
+        <div class="chart-legend" id="ov-bars-legend"></div>
+      </div>
+
+    </div>
+
+    <div class="stack" id="strategy-stack">
       <!-- Hero — italic mono signal with blinking caret, gradient color -->
       <div class="glass hero-card fade-in hero" style="--fi-delay: 120ms;">
         <div class="signal-meta" id="signal-meta">POSITION · —</div>
@@ -1040,6 +1174,7 @@ const STATE_URL = 'https://lnhkgmwixumvqmvphvdw.supabase.co/storage/v1/object/pu
 const SUPABASE_BASE = 'https://lnhkgmwixumvqmvphvdw.supabase.co/storage/v1/object/public/dashboard-glance/';
 const DEFAULT_EQUITY_OBJECT = 'public_equity_curve.json';
 const DEFAULT_STRATEGY = 'SP500_12_Stage_Strategy';
+const OVERVIEW_KEY = '__overview';   // sentinel for the All-Strategies landing view
 
 const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1524,8 +1659,14 @@ function isStale(asOf) {
 function getStrategyFromHash() {
   const h = (location.hash || '').replace(/^#/, '').toLowerCase();
   if (!h) return null;
+  if (h === 'overview' || h === 'all') return OVERVIEW_KEY;
   if (h === 'qqq' || h === 'qqq_via_sp500_12_stage_strategy') return 'QQQ_via_SP500_12_Stage_Strategy';
   if (h === 'sp500' || h === 'spx' || h === 'sp500_12_stage_strategy') return 'SP500_12_Stage_Strategy';
+  // Generic: match any strategy key case-insensitively (NDX/S4/S5 pages).
+  if (currentState && currentState.strategies) {
+    const k = Object.keys(currentState.strategies).find(k => k.toLowerCase() === h);
+    if (k) return k;
+  }
   return null;
 }
 function shortHashFor(key) {
@@ -1684,10 +1825,17 @@ async function load() {
       $('stale-banner').classList.remove('show');
     }
 
-    // Strategy selector
+    // Strategy selector — "All Strategies" overview first (the landing view
+    // since 2026-08-31), then each strategy.
     const strategies = s.strategies || {};
     const select = $('strategy-select');
     select.innerHTML = '';
+    if (Object.keys(strategies).length > 1) {
+      const ovOpt = document.createElement('option');
+      ovOpt.value = OVERVIEW_KEY;
+      ovOpt.textContent = 'All Strategies — Overview';
+      select.appendChild(ovOpt);
+    }
     Object.keys(strategies).forEach(k => {
       const opt = document.createElement('option');
       opt.value = k;
@@ -1698,13 +1846,22 @@ async function load() {
       $('strategy-select-card').classList.add('show');
     }
 
-    const initialKey = getStrategyFromHash() || (
-      Object.keys(strategies).find(k => strategies[k].is_default) || DEFAULT_STRATEGY
+    // Landing: the overview when the site has multiple strategies and the
+    // URL doesn't name a specific one; a strategy hash deep-links as before.
+    const hashKey = getStrategyFromHash();
+    const initialKey = hashKey || (
+      Object.keys(strategies).length > 1 ? OVERVIEW_KEY :
+      (Object.keys(strategies).find(k => strategies[k].is_default) || DEFAULT_STRATEGY)
     );
     if (select.querySelector(`option[value="${initialKey}"]`)) select.value = initialKey;
 
-    renderForStrategy(s, initialKey);
-    renderHero(s, asOf, initialKey);
+    if (initialKey === OVERVIEW_KEY) {
+      showOverviewMode(s);
+    } else {
+      showStrategyMode();
+      renderForStrategy(s, initialKey);
+      renderHero(s, asOf, initialKey);
+    }
 
     // bars_since_entry is the live-trade duration, not a lifetime stat —
     // it lives in the hero/meta context (not Lifetime Stats anymore).
@@ -2025,19 +2182,32 @@ function collapseCommentaryDetails() {
 }
 $('strategy-select').addEventListener('change', e => {
   collapseCommentaryDetails();
-  if (currentState) {
-    renderForStrategy(currentState, e.target.value);
-    // Re-render hero with the newly-selected strategy's per-strategy fields
-    // (position_status / effective_index_leverage / etc.) so the big label
-    // and leverage number reflect the chosen strategy, not the default.
-    renderHero(currentState, currentState.as_of_date, e.target.value);
+  if (!currentState) return;
+  if (e.target.value === OVERVIEW_KEY) {
+    showOverviewMode(currentState);
+    return;
   }
+  showStrategyMode();
+  renderForStrategy(currentState, e.target.value);
+  // Re-render hero with the newly-selected strategy's per-strategy fields
+  // (position_status / effective_index_leverage / etc.) so the big label
+  // and leverage number reflect the chosen strategy, not the default.
+  renderHero(currentState, currentState.as_of_date, e.target.value);
 });
 window.addEventListener('hashchange', () => {
   const k = getStrategyFromHash();
-  if (k && currentState && k !== currentStrategy) {
+  if (!k || !currentState) return;
+  if (k === OVERVIEW_KEY) {
+    if ($('overview-stack').style.display === 'none') {
+      $('strategy-select').value = OVERVIEW_KEY;
+      showOverviewMode(currentState);
+    }
+    return;
+  }
+  if (k !== currentStrategy || $('overview-stack').style.display !== 'none') {
     collapseCommentaryDetails();
     $('strategy-select').value = k;
+    showStrategyMode();
     renderForStrategy(currentState, k);
     renderHero(currentState, currentState.as_of_date, k);
   }
@@ -2731,6 +2901,424 @@ window.addEventListener('resize', () => {
 
 // If state already loaded, kick chart now
 if (currentState && currentStrategy) loadEquityCurve();
+</script>
+
+<script>
+// ─── Portfolio Overview (All-Strategies landing view, 2026-08-31) ──────
+// Renders entirely from public_glance.json + the per-strategy equity-curve
+// objects already published daily — no new data sources. The per-strategy
+// view below is untouched; this block only shows/hides the two stacks.
+
+// Fixed per-strategy colors (CVD-validated on this background; identity
+// follows the strategy, never its rank). Benchmarks are neutral + dashed.
+const OV_COLORS = {
+  SP500_12_Stage_Strategy: '#3D7FC1',
+  NDX_Stage_11d3_Strategy: '#B98429',
+  NDX_LS_Stage2m_Strategy: '#8A6CD1',
+  S5_P10_Combo_Strategy:   '#2E9C8B',
+};
+const OV_BENCH = [
+  { id: 'NDX', label: 'NDX',  color: '#9AA2B1', from: 'NDX_Stage_11d3_Strategy' },
+  { id: 'SPX', label: 'SPX',  color: '#6B7280', from: 'SP500_12_Stage_Strategy' },
+];
+
+let ovCurvePromise = null;   // cached {key: curveJson}
+let ovHidden = new Set();    // series hidden via legend taps
+let ovWindowYears = 1;
+
+function ovShortLabel(key, strat) {
+  const raw = String((strat && strat.label) || key);
+  return raw.split(' (')[0].split(' — ')[0].trim() || key;
+}
+function ovStatus(strat) {
+  if (strat && strat.paused) return 'PAUSED';
+  const ta = (strat && strat.trading_accounts) || {};
+  if (Object.keys(ta.live_accounts || {}).length > 0)  return 'LIVE';
+  if (Object.keys(ta.paper_accounts || {}).length > 0) return 'PAPER';
+  return 'PAUSED';
+}
+function ovLiveEquity(strat) {
+  const la = ((strat || {}).trading_accounts || {}).live_accounts || {};
+  let sum = 0, n = 0;
+  Object.values(la).forEach(a => { if (a && isFinite(a.equity)) { sum += a.equity; n++; } });
+  return { sum, n };
+}
+function ovPrimaryInception(strat) {
+  const la = ((strat || {}).trading_accounts || {}).live_accounts || {};
+  let best = null;
+  Object.values(la).forEach(a => {
+    if (a && a.inception && (!best || (a.equity || 0) > (best.equity || 0))) best = a;
+  });
+  return best ? best.inception : null;
+}
+function ovCls(v) { return v > 0 ? 'pos-t' : (v < 0 ? 'neg-t' : ''); }
+
+function showStrategyMode() {
+  $('overview-stack').style.display = 'none';
+  $('strategy-stack').style.display = '';
+}
+function showOverviewMode(s) {
+  $('strategy-stack').style.display = 'none';
+  $('overview-stack').style.display = '';
+  if (location.hash !== '#overview') history.replaceState(null, '', '#overview');
+  document.title = 'Penta — All Strategies';
+  renderOverview(s);
+}
+
+function renderOverview(s) {
+  const strategies = s.strategies || {};
+  const keys = Object.keys(strategies);
+  $('ov-asof').textContent = s.as_of_date || '';
+
+  // ── Portfolio strip ──
+  let total = 0, accts = 0, wSum = 0, wRet = 0, liveN = 0, paperN = 0;
+  keys.forEach(k => {
+    const st = strategies[k];
+    const { sum, n } = ovLiveEquity(st);
+    total += sum; accts += n;
+    const y = ((st.pnl_state || {}).yesterday_strategy_return_pct);
+    if (sum > 0 && isFinite(y)) { wSum += sum; wRet += sum * y; }
+    const status = ovStatus(st);
+    if (status === 'LIVE') liveN++;
+    if (status === 'PAPER') paperN++;
+  });
+  $('ov-live-total').textContent = fmtMoneyShort(total);
+  $('ov-live-sub').textContent = `Live capital · ${accts} accounts`;
+  const pYest = wSum > 0 ? (wRet / wSum) : null;
+  const yEl = $('ov-yday');
+  yEl.textContent = fmtPct(pYest, 2);
+  yEl.className = 'ov-strip-num tnum ' + ovCls(pYest || 0);
+  $('ov-count').textContent = String(liveN);
+  $('ov-count-sub').textContent = `Live strategies · ${paperN} paper`;
+
+  // ── Strategy cards ──
+  const cards = $('ov-cards');
+  cards.innerHTML = '';
+  keys.forEach((k, i) => {
+    const st = strategies[k];
+    const status = ovStatus(st);
+    const color = OV_COLORS[k] || 'rgba(238,242,246,0.35)';
+    // The default strategy's pnl lives at the glance top level (legacy shape).
+    const ps = st.pnl_state || (st.is_default ? (s.pnl_state || {}) : {});
+    const { sum, n } = ovLiveEquity(st);
+    const inc = ovPrimaryInception(st);
+    const s5 = (st.stats_5y || {}).strategy;
+    const paused = status === 'PAUSED';
+
+    const card = document.createElement('div');
+    card.className = 'glass ov-card fade-in';
+    card.style.setProperty('--ov-color', paused ? 'rgba(238,242,246,0.2)' : color);
+    card.style.setProperty('--fi-delay', (160 + i * 40) + 'ms');
+    if (paused) card.style.opacity = '0.65';
+
+    const chipCls = status === 'LIVE' ? 'live' : (status === 'PAPER' ? 'paper' : '');
+    let html =
+      `<div class="ov-card-head">` +
+      `<span class="ov-card-name">${esc(ovShortLabel(k, st))}</span>` +
+      `<span class="ov-chip ${chipCls}">${status}</span>` +
+      `</div>`;
+
+    if (paused) {
+      html += `<div class="ov-sub">Paused — this strategy is being rebuilt and its historical figures are under review. No capital is at work here.</div>`;
+    } else {
+      const m = (label, v, dec) =>
+        `<div><div class="ov-metric-num tnum ${ovCls(v)}">${fmtPct(v, dec == null ? 1 : dec)}</div>` +
+        `<div class="metric-sub">${label}</div></div>`;
+      html += `<div class="ov-metrics">` +
+        m('Yesterday', ps.yesterday_strategy_return_pct, 2) +
+        m('YTD', ps.ytd_return_pct) +
+        m('1 Year', ps.one_year_return_pct) +
+        `</div>`;
+      html += `<svg class="ov-spark" id="ov-spark-${i}" viewBox="0 0 300 30" preserveAspectRatio="none"></svg>`;
+      const lines = [];
+      if (sum > 0) {
+        let liveLine = `Live ${fmtMoneyShort(sum)}` + (n > 1 ? ` across ${n} accounts` : '');
+        if (inc && isFinite(inc.return_pct)) {
+          liveLine += ` · since ${esc(inc.inception_date || '')} <span class="tnum ${ovCls(inc.return_pct)}">${fmtPct(inc.return_pct)}</span>` +
+            (isFinite(inc.bench_return_pct) ? ` vs ${esc(inc.bench_label || 'index')} ${fmtPct(inc.bench_return_pct)}` : '');
+        }
+        lines.push(liveLine);
+      } else if (status === 'PAPER') {
+        lines.push('Paper account — no real capital yet');
+      }
+      if (s5) {
+        lines.push(`Last 5y: <span class="tnum">${fmtPct(s5.cagr, 1, false)}/yr · ${fmtNum(s5.sharpe, 2)} Sharpe · ${fmtPct(s5.maxdd, 1, false)} max decline</span>`);
+      }
+      if (lines.length) html += `<div class="ov-sub">${lines.join('<br>')}</div>`;
+    }
+    card.innerHTML = html;
+    card.dataset.spark = paused ? '' : String(i);
+    card.dataset.key = k;
+    card.addEventListener('click', () => {
+      const sel = $('strategy-select');
+      if (sel.querySelector(`option[value="${k}"]`)) sel.value = k;
+      showStrategyMode();
+      renderForStrategy(currentState, k);
+      renderHero(currentState, currentState.as_of_date, k);
+      window.scrollTo({ top: 0 });
+    });
+    cards.appendChild(card);
+  });
+
+  // ── Curves → sparklines + charts ──
+  ovFetchCurves(strategies).then(curves => {
+    keys.forEach((k, i) => {
+      const c = curves[k];
+      const el = $(`ov-spark-${i}`);
+      if (!c || !el || !Array.isArray(c.eq)) return;
+      const eq = c.eq.slice(-27);
+      if (eq.length < 3) return;
+      const min = Math.min(...eq), max = Math.max(...eq);
+      const span = (max - min) || 1;
+      const pts = eq.map((v, j) =>
+        `${(j / (eq.length - 1) * 300).toFixed(1)},${(27 - ((v - min) / span) * 24).toFixed(1)}`
+      ).join(' ');
+      const dash = ovStatus(strategies[k]) === 'PAPER' ? ' stroke-dasharray="5 4"' : '';
+      el.innerHTML = `<polyline points="${pts}" fill="none" stroke="${OV_COLORS[k] || '#888'}" stroke-width="1.8"${dash}/>`;
+    });
+    ovRenderRace(strategies, curves);
+    ovRenderBars(strategies, curves);
+  }).catch(err => console.error('overview curves failed', err));
+
+  ovRenderMap(strategies);
+}
+
+function ovFetchCurves(strategies) {
+  if (ovCurvePromise) return ovCurvePromise;
+  const wanted = Object.keys(strategies).filter(k =>
+    OV_COLORS[k] && strategies[k].equity_curve_object);
+  ovCurvePromise = Promise.all(wanted.map(k =>
+    fetch(SUPABASE_BASE + strategies[k].equity_curve_object, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(j => [k, j])
+  )).then(pairs => Object.fromEntries(pairs.filter(p => p[1])));
+  return ovCurvePromise;
+}
+
+// Series list for race + bars: strategies (from their curves' eq) then
+// benchmark indexes (from designated curves' bm columns).
+function ovSeriesList(strategies, curves) {
+  const out = [];
+  Object.keys(strategies).forEach(k => {
+    const c = curves[k];
+    if (!c || !OV_COLORS[k] || !Array.isArray(c.ts) || !Array.isArray(c.eq)) return;
+    out.push({
+      id: k, label: ovShortLabel(k, strategies[k]), color: OV_COLORS[k],
+      dashed: ovStatus(strategies[k]) === 'PAPER',
+      ts: c.ts, vals: c.eq,
+    });
+  });
+  OV_BENCH.forEach(b => {
+    const c = curves[b.from];
+    if (!c || !Array.isArray(c.bm)) return;
+    out.push({ id: b.id, label: b.label, color: b.color, dashed: true, bench: true, ts: c.ts, vals: c.bm });
+  });
+  return out;
+}
+
+// Curve `ts` values are epoch SECONDS (the equity-curve objects publish
+// them that way); accept seconds, milliseconds, or date strings.
+function ovTsMillis(d) {
+  if (typeof d === 'number') return d < 1e12 ? d * 1000 : d;
+  return new Date(d).getTime();
+}
+function ovWindowPoints(series, years) {
+  const ts = series.ts.map(ovTsMillis);
+  const end = ts[ts.length - 1];
+  const start = end - years * 365.25 * 86400e3;
+  const pts = [];
+  for (let i = 0; i < ts.length; i++) {
+    if (ts[i] >= start && isFinite(series.vals[i]) && series.vals[i] > 0) {
+      pts.push([ts[i], series.vals[i]]);
+    }
+  }
+  return pts;
+}
+
+function ovRenderRace(strategies, curves) {
+  const svg = $('ov-race');
+  const legend = $('ov-race-legend');
+  if (!svg) return;
+  const all = ovSeriesList(strategies, curves);
+  const W = 370, H = 190, padL = 34, padR = 44, padT = 10, padB = 20;
+
+  // Rebase each series to 100 at its first point inside the window.
+  const drawn = [];
+  all.forEach(sr => {
+    const pts = ovWindowPoints(sr, ovWindowYears);
+    if (pts.length < 3) return;
+    const base = pts[0][1];
+    drawn.push({ ...sr, pts: pts.map(p => [p[0], 100 * p[1] / base]) });
+  });
+  if (!drawn.length) return;
+
+  const visible = drawn.filter(sr => !ovHidden.has(sr.id));
+  const shown = visible.length ? visible : drawn;
+  let t0 = Infinity, t1 = -Infinity, vMin = Infinity, vMax = -Infinity;
+  shown.forEach(sr => sr.pts.forEach(p => {
+    t0 = Math.min(t0, p[0]); t1 = Math.max(t1, p[0]);
+    vMin = Math.min(vMin, p[1]); vMax = Math.max(vMax, p[1]);
+  }));
+  const vPad = (vMax - vMin) * 0.06 || 1;
+  vMin -= vPad; vMax += vPad;
+  const x = t => padL + (t - t0) / (t1 - t0 || 1) * (W - padL - padR);
+  const y = v => padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB);
+
+  let inner = '';
+  [vMin + (vMax - vMin) * 0.25, (vMin + vMax) / 2, vMin + (vMax - vMin) * 0.75].forEach(gv => {
+    inner += `<line x1="${padL}" y1="${y(gv).toFixed(1)}" x2="${W - padR}" y2="${y(gv).toFixed(1)}" stroke="rgba(255,255,255,0.06)"/>`;
+  });
+  inner += `<line x1="${padL}" y1="${y(100).toFixed(1)}" x2="${W - padR}" y2="${y(100).toFixed(1)}" stroke="rgba(255,255,255,0.16)" stroke-dasharray="2 3"/>` +
+    `<text x="${padL - 4}" y="${y(100) + 3}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="end">100</text>`;
+  const fmtD = t => new Date(t).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+  inner += `<text x="${padL}" y="${H - 6}" fill="rgba(238,242,246,0.4)" font-size="8">${fmtD(t0)}</text>` +
+    `<text x="${W - padR}" y="${H - 6}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="end">${fmtD(t1)}</text>`;
+
+  shown.forEach(sr => {
+    const d = sr.pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+    const dash = sr.dashed ? ' stroke-dasharray="4 3"' : '';
+    inner += `<path d="${d}" fill="none" stroke="${sr.color}" stroke-width="${sr.bench ? 1.4 : 2}"${dash}/>`;
+  });
+  // Right-edge end labels, collision-nudged
+  const ends = shown.map(sr => ({ sr, yy: y(sr.pts[sr.pts.length - 1][1]) }))
+    .sort((a, b) => a.yy - b.yy);
+  for (let i = 1; i < ends.length; i++) {
+    if (ends[i].yy - ends[i - 1].yy < 9) ends[i].yy = ends[i - 1].yy + 9;
+  }
+  ends.forEach(e => {
+    const endV = e.sr.pts[e.sr.pts.length - 1][1] - 100;
+    inner += `<text x="${W - padR + 3}" y="${(e.yy + 3).toFixed(1)}" fill="${e.sr.color}" font-size="8.5" font-weight="600">${(endV > 0 ? '+' : '') + endV.toFixed(0)}%</text>`;
+  });
+  svg.innerHTML = inner;
+
+  // Legend — every series tappable
+  legend.innerHTML = '';
+  drawn.forEach(sr => {
+    const item = document.createElement('span');
+    item.className = 'legend-item ov-toggle' + (ovHidden.has(sr.id) ? ' ov-off' : '');
+    const endV = sr.pts[sr.pts.length - 1][1] - 100;
+    item.innerHTML =
+      `<span class="legend-swatch" style="background:${sr.color};${sr.dashed ? 'opacity:0.75;' : ''}"></span>` +
+      `<span class="legend-label">${esc(sr.label)}</span>` +
+      `<span class="tnum ${ovCls(endV)}">${(endV > 0 ? '+' : '') + endV.toFixed(1)}%</span>`;
+    item.addEventListener('click', () => {
+      if (ovHidden.has(sr.id)) ovHidden.delete(sr.id); else ovHidden.add(sr.id);
+      ovRenderRace(strategies, curves);
+    });
+    legend.appendChild(item);
+  });
+}
+
+function ovRenderMap(strategies) {
+  const svg = $('ov-map');
+  if (!svg) return;
+  const dots = [];
+  Object.keys(strategies).forEach(k => {
+    if (!OV_COLORS[k]) return;
+    const st = strategies[k];
+    const s5 = (st.stats_5y || {}).strategy;
+    if (!s5) return;
+    dots.push({ label: ovShortLabel(k, st), color: OV_COLORS[k], cagr: s5.cagr, dd: s5.maxdd,
+                hollow: ovStatus(st) === 'PAPER' });
+  });
+  OV_BENCH.forEach(b => {
+    const s5 = ((strategies[b.from] || {}).stats_5y || {}).bench;
+    if (s5) dots.push({ label: b.label, color: 'rgba(238,242,246,0.45)', cagr: s5.cagr, dd: s5.maxdd, bench: true });
+  });
+  if (!dots.length) { svg.innerHTML = ''; return; }
+  const W = 370, H = 210, padL = 38, padR = 16, padT = 12, padB = 30;
+  const xMax = Math.max(...dots.map(d => d.dd)) * 1.25;
+  const yMax = Math.max(...dots.map(d => d.cagr)) * 1.18;
+  const x = v => padL + (v / xMax) * (W - padL - padR);
+  const y = v => padT + (1 - v / yMax) * (H - padT - padB);
+  let inner = `<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="rgba(255,255,255,0.15)"/>` +
+    `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="rgba(255,255,255,0.15)"/>`;
+  [0.25, 0.5, 0.75, 1].forEach(f => {
+    inner += `<text x="${x(xMax * f).toFixed(1)}" y="${H - padB + 12}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="middle">-${Math.round(xMax * f)}%</text>` +
+      `<text x="${padL - 5}" y="${(y(yMax * f) + 3).toFixed(1)}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="end">${Math.round(yMax * f)}%</text>`;
+  });
+  inner += `<text x="${(padL + (W - padR)) / 2}" y="${H - 4}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="middle">deepest decline</text>` +
+    `<text x="10" y="${(padT + H - padB) / 2}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="middle" transform="rotate(-90 10 ${(padT + H - padB) / 2})">return per year</text>`;
+  dots.forEach(d => {
+    const cx = x(d.dd).toFixed(1), cy = y(d.cagr).toFixed(1);
+    if (d.hollow) {
+      inner += `<circle cx="${cx}" cy="${cy}" r="5" fill="none" stroke="${d.color}" stroke-width="2.5"/>`;
+    } else {
+      inner += `<circle cx="${cx}" cy="${cy}" r="${d.bench ? 4 : 5.5}" fill="${d.color}" stroke="#12151c" stroke-width="1.5"/>`;
+    }
+    const anchor = (parseFloat(cx) > W - 90) ? 'end' : 'start';
+    const tx = anchor === 'end' ? parseFloat(cx) - 8 : parseFloat(cx) + 8;
+    inner += `<text x="${tx}" y="${(parseFloat(cy) + 3).toFixed(1)}" fill="${d.bench ? 'rgba(238,242,246,0.55)' : '#EEF2F6'}" font-size="8.5" font-weight="600" text-anchor="${anchor}">${esc(d.label)}</text>`;
+  });
+  svg.innerHTML = inner;
+}
+
+function ovRenderBars(strategies, curves) {
+  const svg = $('ov-bars');
+  const legend = $('ov-bars-legend');
+  if (!svg) return;
+  const series = ovSeriesList(strategies, curves);
+  const windows = [{ label: '3 months', yrs: 0.25 }, { label: '1 year', yrs: 1 }];
+  const groups = windows.map(w => ({
+    label: w.label,
+    bars: series.map(sr => {
+      const pts = ovWindowPoints(sr, w.yrs);
+      if (pts.length < 2) return null;
+      return { label: sr.label, color: sr.color, bench: !!sr.bench,
+               ret: (pts[pts.length - 1][1] / pts[0][1] - 1) * 100 };
+    }).filter(Boolean),
+  }));
+  const vals = groups.flatMap(g => g.bars.map(b => b.ret));
+  if (!vals.length) { svg.innerHTML = ''; return; }
+  const W = 370, H = 200, padL = 34, padR = 10, padT = 14, padB = 26;
+  const vMax = Math.max(0, ...vals) * 1.15 || 1;
+  const vMin = Math.min(0, ...vals) * 1.15;
+  const y = v => padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB);
+  let inner = `<line x1="${padL}" y1="${y(0).toFixed(1)}" x2="${W - padR}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,0.18)"/>`;
+  [vMax * 0.5, vMax].forEach(gv => {
+    inner += `<text x="${padL - 4}" y="${(y(gv) + 3).toFixed(1)}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="end">+${Math.round(gv)}%</text>` +
+      `<line x1="${padL}" y1="${y(gv).toFixed(1)}" x2="${W - padR}" y2="${y(gv).toFixed(1)}" stroke="rgba(255,255,255,0.05)"/>`;
+  });
+  const groupW = (W - padL - padR) / groups.length;
+  groups.forEach((g, gi) => {
+    const n = g.bars.length;
+    const bw = Math.min(16, (groupW - 24) / n);
+    const startX = padL + gi * groupW + (groupW - n * (bw + 3)) / 2;
+    g.bars.forEach((b, bi) => {
+      const bx = startX + bi * (bw + 3);
+      const y0 = y(Math.max(0, b.ret)), y1 = y(Math.min(0, b.ret));
+      const h = Math.max(1.5, y1 - y0);
+      inner += `<rect x="${bx.toFixed(1)}" y="${y0.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5" fill="${b.color}"${b.bench ? ' fill-opacity="0.45"' : ''}/>`;
+    });
+    inner += `<text x="${(padL + gi * groupW + groupW / 2).toFixed(1)}" y="${H - 8}" fill="rgba(238,242,246,0.6)" font-size="9" font-weight="600" text-anchor="middle">${esc(g.label)}</text>`;
+  });
+  svg.innerHTML = inner;
+  legend.innerHTML = '';
+  const seen = new Set();
+  groups.flatMap(g => g.bars).forEach(b => {
+    if (seen.has(b.label)) return;
+    seen.add(b.label);
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-swatch" style="background:${b.color};${b.bench ? 'opacity:0.5;' : ''}"></span>` +
+      `<span class="legend-label">${esc(b.label)}</span>`;
+    legend.appendChild(item);
+  });
+}
+
+// Window toggle for the race chart
+document.querySelectorAll('#ov-window-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#ov-window-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ovWindowYears = parseFloat(btn.dataset.win);
+    if (currentState) {
+      ovFetchCurves(currentState.strategies || {}).then(curves =>
+        ovRenderRace(currentState.strategies || {}, curves));
+    }
+  });
+});
 </script>
 </body>
 </html>
