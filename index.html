@@ -2917,6 +2917,31 @@ const OV_COLORS = {
   NDX_LS_Stage2m_Strategy: '#8A6CD1',
   S5_P10_Combo_Strategy:   '#2E9C8B',
 };
+// Strategy numbering for display ("Strategy 1"…"Strategy 5" on cards,
+// "S1"…"S5" in chart legends). Keyed by group name like OV_COLORS.
+const OV_NUM = {
+  SP500_12_Stage_Strategy: 1,
+  QQQ_via_SP500_12_Stage_Strategy: 2,
+  NDX_Stage_11d3_Strategy: 3,
+  NDX_LS_Stage2m_Strategy: 4,
+  S5_P10_Combo_Strategy: 5,
+};
+function ovCardName(key, strat) {
+  const n = OV_NUM[key];
+  let base = ovShortLabel(key, strat);
+  // Labels like "S5 — S3/S1 Rotation (P10)" shorten to just "S5" — use the
+  // descriptive segment after the dash instead so the card reads
+  // "Strategy 5 — S3/S1 Rotation" rather than "Strategy 5 — S5".
+  if (/^S\d+$/.test(base)) {
+    const parts = String((strat && strat.label) || '').split(' — ');
+    if (parts.length > 1) base = parts[1].split(' (')[0].trim() || base;
+  }
+  return n ? `Strategy ${n} — ${base}` : base;
+}
+function ovSeriesLabel(key, strat) {
+  const n = OV_NUM[key];
+  return n ? `S${n}` : ovShortLabel(key, strat);
+}
 const OV_BENCH = [
   { id: 'NDX', label: 'NDX',  color: '#9AA2B1', from: 'NDX_Stage_11d3_Strategy' },
   { id: 'SPX', label: 'SPX',  color: '#6B7280', from: 'SP500_12_Stage_Strategy' },
@@ -3014,7 +3039,7 @@ function renderOverview(s) {
     const chipCls = status === 'LIVE' ? 'live' : (status === 'PAPER' ? 'paper' : '');
     let html =
       `<div class="ov-card-head">` +
-      `<span class="ov-card-name">${esc(ovShortLabel(k, st))}</span>` +
+      `<span class="ov-card-name">${esc(ovCardName(k, st))}</span>` +
       `<span class="ov-chip ${chipCls}">${status}</span>` +
       `</div>`;
 
@@ -3104,7 +3129,7 @@ function ovSeriesList(strategies, curves) {
     const c = curves[k];
     if (!c || !OV_COLORS[k] || !Array.isArray(c.ts) || !Array.isArray(c.eq)) return;
     out.push({
-      id: k, label: ovShortLabel(k, strategies[k]), color: OV_COLORS[k],
+      id: k, label: ovSeriesLabel(k, strategies[k]), color: OV_COLORS[k],
       dashed: ovStatus(strategies[k]) === 'PAPER',
       ts: c.ts, vals: c.eq,
     });
@@ -3219,7 +3244,7 @@ function ovRenderMap(strategies) {
     const st = strategies[k];
     const s5 = (st.stats_5y || {}).strategy;
     if (!s5) return;
-    dots.push({ label: ovShortLabel(k, st), color: OV_COLORS[k], cagr: s5.cagr, dd: s5.maxdd,
+    dots.push({ label: ovSeriesLabel(k, st), color: OV_COLORS[k], cagr: s5.cagr, dd: s5.maxdd,
                 hollow: ovStatus(st) === 'PAPER' });
   });
   OV_BENCH.forEach(b => {
