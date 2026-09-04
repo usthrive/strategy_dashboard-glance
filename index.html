@@ -2926,7 +2926,19 @@ const OV_NUM = {
   NDX_LS_Stage2m_Strategy: 4,
   S5_P10_Combo_Strategy: 5,
 };
+// Successor candidates running paper-first beside their live parent
+// (e.g. S1 v2.1 exit-to-cash overlay, staged 2026-09-03). Shown as a
+// clearly-tagged candidate card under the parent's identity; excluded
+// from the charts so the live engine's line is never duplicated.
+const OV_CANDIDATE = {
+  SP500_12_Stage_Strategy_v21: { of: 'SP500_12_Stage_Strategy', tag: 'v2.1 candidate · paper trial' },
+};
 function ovCardName(key, strat) {
+  const cand = OV_CANDIDATE[key];
+  if (cand) {
+    const pn = OV_NUM[cand.of];
+    return (pn ? `Strategy ${pn}` : 'Candidate') + ` · ${cand.tag}`;
+  }
   const n = OV_NUM[key];
   let base = ovShortLabel(key, strat);
   // Labels like "S5 — S3/S1 Rotation (P10)" shorten to just "S5" — use the
@@ -3022,7 +3034,8 @@ function renderOverview(s) {
   keys.forEach((k, i) => {
     const st = strategies[k];
     const status = ovStatus(st);
-    const color = OV_COLORS[k] || 'rgba(238,242,246,0.35)';
+    const cand = OV_CANDIDATE[k];
+    const color = OV_COLORS[k] || (cand && OV_COLORS[cand.of]) || 'rgba(238,242,246,0.35)';
     // The default strategy's pnl lives at the glance top level (legacy shape).
     const ps = st.pnl_state || (st.is_default ? (s.pnl_state || {}) : {});
     const { sum, n } = ovLiveEquity(st);
@@ -3064,7 +3077,7 @@ function renderOverview(s) {
         }
         lines.push(liveLine);
       } else if (status === 'PAPER') {
-        lines.push('Paper account — no real capital yet');
+        lines.push(cand ? 'Successor candidate proving itself on the paper account — live money stays on the current engine until the flip' : 'Paper account — no real capital yet');
       }
       if (s5) {
         lines.push(`Last 5y: <span class="tnum">${fmtPct(s5.cagr, 1, false)}/yr · ${fmtNum(s5.sharpe, 2)} Sharpe · ${fmtPct(s5.maxdd, 1, false)} max decline</span>`);
