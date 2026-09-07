@@ -1661,6 +1661,7 @@ function getStrategyFromHash() {
   if (!h) return null;
   if (h === 'overview' || h === 'all') return OVERVIEW_KEY;
   if (h === 'qqq' || h === 'qqq_via_sp500_12_stage_strategy') return 'QQQ_via_SP500_12_Stage_Strategy';
+  if (h === 's2' || h === 'sp500_s2_longshort_strategy') return 'SP500_S2_LongShort_Strategy';
   if (h === 'sp500' || h === 'spx' || h === 'sp500_12_stage_strategy') return 'SP500_12_Stage_Strategy';
   // Generic: match any strategy key case-insensitively (NDX/S4/S5 pages).
   if (currentState && currentState.strategies) {
@@ -1671,6 +1672,7 @@ function getStrategyFromHash() {
 }
 function shortHashFor(key) {
   if (key === 'QQQ_via_SP500_12_Stage_Strategy') return 'qqq';
+  if (key === 'SP500_S2_LongShort_Strategy') return 's2';
   if (key === 'SP500_12_Stage_Strategy') return 'sp500';
   return key.toLowerCase();
 }
@@ -2913,6 +2915,7 @@ if (currentState && currentStrategy) loadEquityCurve();
 // follows the strategy, never its rank). Benchmarks are neutral + dashed.
 const OV_COLORS = {
   SP500_12_Stage_Strategy: '#3D7FC1',
+  SP500_S2_LongShort_Strategy: '#C7523E',   // Strategy 2 v2.2 (SPX long/short on the S1 book), live 2026-09-08
   NDX_Stage_11d3_Strategy: '#B98429',
   NDX_LS_Stage2m_Strategy: '#8A6CD1',
   S5_P10_Combo_Strategy:   '#2E9C8B',
@@ -2921,7 +2924,8 @@ const OV_COLORS = {
 // "S1"…"S5" in chart legends). Keyed by group name like OV_COLORS.
 const OV_NUM = {
   SP500_12_Stage_Strategy: 1,
-  QQQ_via_SP500_12_Stage_Strategy: 2,
+  QQQ_via_SP500_12_Stage_Strategy: 2,      // retired 2026-09-07 (its accounts moved to the v2.2 group below)
+  SP500_S2_LongShort_Strategy: 2,          // Strategy 2 v2.2 — the S&P 500 long/short book on the Strategy 1 leg
   NDX_Stage_11d3_Strategy: 3,
   NDX_LS_Stage2m_Strategy: 4,
   S5_P10_Combo_Strategy: 5,
