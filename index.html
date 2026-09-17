@@ -216,6 +216,8 @@
     .strategy-select-card.show { display: flex; }
     .strategy-select-card select {
       flex: 1;
+      min-width: 0;
+      max-width: 100%;
       background: rgba(255,255,255,0.04);
       color: var(--ink);
       border: 1px solid var(--glass-edge);
@@ -851,12 +853,23 @@
       font-weight: 500;
       letter-spacing: -0.3px;
     }
-    #ov-cards { display: flex; flex-direction: column; gap: 12px; }
+    /* Strategy tiles: a two-column grid (2026-09-17, user ruling — was a
+       one-per-row stack). An odd last tile spans the row so the grid stays full;
+       below 360px the grid collapses to one column. */
+    #ov-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    #ov-cards > .ov-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    @media (max-width: 359px) {
+      #ov-cards { grid-template-columns: minmax(0, 1fr); }
+      #ov-cards > .ov-card:last-child:nth-child(odd) { grid-column: auto; }
+    }
     .ov-card {
       position: relative;
-      padding: 14px 16px 12px 18px;
+      padding: 12px 12px 10px 14px;
       cursor: pointer;
       transition: transform 0.15s var(--ease);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
     .ov-card:active { transform: scale(0.985); }
     .ov-card::before {
@@ -869,16 +882,18 @@
     }
     .ov-card-head {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
     }
-    .ov-card-name { font-size: 13.5px; font-weight: 600; }
+    .ov-card-name { font-size: 12.5px; font-weight: 600; line-height: 1.25; min-width: 0; }
     .ov-chip {
       font-family: var(--font-mono);
-      font-size: 9px;
-      letter-spacing: 1.2px;
-      padding: 2px 8px;
+      font-size: 8px;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      flex-shrink: 0;
+      margin-top: 1px;
       border-radius: var(--radius-chip);
       border: 1px solid var(--glass-edge);
       color: var(--mute);
@@ -889,19 +904,35 @@
     .ov-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .ov-metric-num { font-family: var(--font-mono); font-size: 13px; }
-    .ov-sub {
-      font-size: 10.5px;
-      color: var(--mute);
+      gap: 6px;
       margin-top: 8px;
-      line-height: 1.5;
     }
-    .ov-spark { width: 100%; height: 30px; margin-top: 8px; display: block; }
+    .ov-metric-num { font-family: var(--font-mono); font-size: 11.5px; }
+    .ov-metrics .metric-sub { font-size: 8.5px; letter-spacing: 1px; }
+    .ov-sub {
+      font-size: 9.5px;
+      color: var(--mute);
+      margin-top: 6px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .ov-sub .ov-idx { color: var(--faint); }
+    .ov-spark { width: 100%; height: 44px; margin-top: 8px; display: block; }
+    .ov-spark-foot {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px;
+      font-size: 9px; color: var(--mute); margin-top: 3px;
+    }
+    .ov-spark-foot .ov-stale { color: var(--faint); white-space: nowrap; }
     .legend-item.ov-off { opacity: 0.3; }
     .legend-item.ov-toggle { cursor: pointer; user-select: none; }
+    /* Overview legends carry 5-7 entries: wrap rows instead of running off the card
+       (2026-09-17: S5/S2/NDX/SPX were invisible on phones, SPX even on desktop). */
+    #ov-race-legend, #ov-bars-legend {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 6px 14px;
+    }
+    .legend-item .ov-stale { color: var(--faint, var(--mute)); font-size: 9px; margin-left: 3px; }
     .pos-t { color: var(--pos); }
     .neg-t { color: var(--neg); }
   </style>
@@ -3067,24 +3098,24 @@ function renderOverview(s) {
         `<div><div class="ov-metric-num tnum ${ovCls(v)}">${fmtPct(v, dec == null ? 1 : dec)}</div>` +
         `<div class="metric-sub">${label}</div></div>`;
       html += `<div class="ov-metrics">` +
-        m('Yesterday', ps.yesterday_strategy_return_pct, 2) +
+        m('1 day', ps.yesterday_strategy_return_pct, 2) +
         m('YTD', ps.ytd_return_pct) +
-        m('1 Year', ps.one_year_return_pct) +
+        m('1 year', ps.one_year_return_pct) +
         `</div>`;
-      html += `<svg class="ov-spark" id="ov-spark-${i}" viewBox="0 0 300 30" preserveAspectRatio="none"></svg>`;
+      html += `<svg class="ov-spark" id="ov-spark-${i}" viewBox="0 0 300 44" preserveAspectRatio="none"></svg>` +
+        `<div class="ov-spark-foot" id="ov-spark-foot-${i}"></div>`;
       const lines = [];
       if (sum > 0) {
-        let liveLine = `Live ${fmtMoneyShort(sum)}` + (n > 1 ? ` across ${n} accounts` : '');
+        lines.push(`Live ${fmtMoneyShort(sum)}` + (n > 1 ? ` · ${n} accounts` : ''));
         if (inc && isFinite(inc.return_pct)) {
-          liveLine += ` · since ${esc(inc.inception_date || '')} <span class="tnum ${ovCls(inc.return_pct)}">${fmtPct(inc.return_pct)}</span>` +
-            (isFinite(inc.bench_return_pct) ? ` vs ${esc(inc.bench_label || 'index')} ${fmtPct(inc.bench_return_pct)}` : '');
+          lines.push(`Since ${esc(inc.inception_date || '')} <span class="tnum ${ovCls(inc.return_pct)}">${fmtPct(inc.return_pct)}</span>` +
+            (isFinite(inc.bench_return_pct) ? ` <span class="ov-idx">vs ${esc(inc.bench_label || 'index')} ${fmtPct(inc.bench_return_pct)}</span>` : ''));
         }
-        lines.push(liveLine);
       } else if (status === 'PAPER') {
         lines.push(cand ? 'Successor candidate proving itself on the paper account — live money stays on the current engine until the flip' : 'Paper account — no real capital yet');
       }
       if (s5) {
-        lines.push(`Last 5y: <span class="tnum">${fmtPct(s5.cagr, 1, false)}/yr · ${fmtNum(s5.sharpe, 2)} Sharpe · ${fmtPct(s5.maxdd, 1, false)} max decline</span>`);
+        lines.push(`5y <span class="tnum">${fmtPct(s5.cagr, 1, false)}/yr · ${fmtNum(s5.sharpe, 2)} Sharpe · ${fmtPct(s5.maxdd, 1, false)} max decline</span>`);
       }
       if (lines.length) html += `<div class="ov-sub">${lines.join('<br>')}</div>`;
     }
@@ -3104,19 +3135,51 @@ function renderOverview(s) {
 
   // ── Curves → sparklines + charts ──
   ovFetchCurves(strategies).then(curves => {
+    // Tile sparkline (2026-09-17): the strategy against ITS OWN index over the
+    // last 26 weeks, both rebased to 100 at the window start, on a time axis
+    // shared by every tile (a curve that ends early stops short with a dot and
+    // a "to <month>" note — S5's certified curve ends at its research freeze).
+    const allSeries = ovSeriesList(strategies, curves);
+    const commonEnd = ovCommonEnd(allSeries);
+    const SPARK_W = 300, SPARK_H = 44, SPARK_YRS = 0.5;
     keys.forEach((k, i) => {
       const c = curves[k];
-      const el = $(`ov-spark-${i}`);
-      if (!c || !el || !Array.isArray(c.eq)) return;
-      const eq = c.eq.slice(-27);
-      if (eq.length < 3) return;
-      const min = Math.min(...eq), max = Math.max(...eq);
-      const span = (max - min) || 1;
-      const pts = eq.map((v, j) =>
-        `${(j / (eq.length - 1) * 300).toFixed(1)},${(27 - ((v - min) / span) * 24).toFixed(1)}`
-      ).join(' ');
-      const dash = ovStatus(strategies[k]) === 'PAPER' ? ' stroke-dasharray="5 4"' : '';
-      el.innerHTML = `<polyline points="${pts}" fill="none" stroke="${OV_COLORS[k] || '#888'}" stroke-width="1.8"${dash}/>`;
+      const el = $(`ov-spark-${i}`), foot = $(`ov-spark-foot-${i}`);
+      if (!c || !el || !Array.isArray(c.eq) || !Array.isArray(c.ts)) return;
+      const sr = allSeries.find(x => x.id === k);
+      if (!sr) return;
+      const sp = ovWindowPoints(sr, SPARK_YRS, commonEnd);
+      if (sp.length < 3) return;
+      const rb = pts => pts.map(p => [p[0], 100 * p[1] / pts[0][1]]);
+      const sPts = rb(sp);
+      const bm = Array.isArray(c.bm) ? ovWindowPoints({ ts: c.ts, vals: c.bm }, SPARK_YRS, commonEnd) : [];
+      const bPts = bm.length >= 3 ? rb(bm) : [];
+      const t0 = Math.min(sPts[0][0], bPts.length ? bPts[0][0] : Infinity), t1 = commonEnd;
+      const allV = sPts.concat(bPts).map(p => p[1]);
+      let vMin = Math.min(...allV), vMax = Math.max(...allV);
+      const vPad = (vMax - vMin) * 0.08 || 1; vMin -= vPad; vMax += vPad;
+      const x = t => 3 + (t - t0) / (t1 - t0 || 1) * (SPARK_W - 6);
+      const y = v => 3 + (1 - (v - vMin) / (vMax - vMin)) * (SPARK_H - 6);
+      const line = (pts, stroke, w, dash) =>
+        `<polyline points="${pts.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="${stroke}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+      let inner = `<line x1="3" y1="${y(100).toFixed(1)}" x2="${SPARK_W - 3}" y2="${y(100).toFixed(1)}" stroke="rgba(255,255,255,0.14)" stroke-dasharray="2 3"/>`;
+      if (bPts.length) inner += line(bPts, 'rgba(238,242,246,0.45)', 1.2, '4 3');
+      inner += line(sPts, OV_COLORS[k] || '#888', 1.8, ovStatus(strategies[k]) === 'PAPER' ? '5 4' : '');
+      const stale = ovStaleNote(sr, commonEnd);
+      if (stale) {
+        const last = sPts[sPts.length - 1];
+        inner += `<circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="2.6" fill="${OV_COLORS[k] || '#888'}"/>`;
+      }
+      el.innerHTML = inner;
+      if (foot) {
+        const bench = OV_BENCH.find(b => b.from === k) || OV_BENCH.find(b => (OV_COLORS[k] && b.id === (/SP500/.test(k) ? 'SPX' : 'NDX')));
+        const sRet = sPts[sPts.length - 1][1] - 100;
+        const bRet = bPts.length ? bPts[bPts.length - 1][1] - 100 : null;
+        foot.innerHTML =
+          `<span>6 months <span class="tnum ${ovCls(sRet)}">${fmtPct(sRet)}</span>` +
+          (bRet == null ? '' : ` <span class="ov-idx">· ${esc(bench ? bench.label : 'index')} ${fmtPct(bRet)}</span>`) + `</span>` +
+          `<span class="ov-stale">${stale ? esc(stale) : ''}</span>`;
+      }
     });
     ovRenderRace(strategies, curves);
     ovRenderBars(strategies, curves);
@@ -3165,9 +3228,24 @@ function ovTsMillis(d) {
   if (typeof d === 'number') return d < 1e12 ? d * 1000 : d;
   return new Date(d).getTime();
 }
-function ovWindowPoints(series, years) {
+// Common window end: the latest timestamp across ALL series. Windowing each
+// series from its OWN last point drew a curve that ends early (S5's certified
+// curve stops at its 2026-07-17 research freeze) shifted two months left of
+// the others (2026-09-17). With a shared end, such a curve stops short instead.
+function ovCommonEnd(seriesList) {
+  let end = -Infinity;
+  seriesList.forEach(sr => { end = Math.max(end, ovTsMillis(sr.ts[sr.ts.length - 1])); });
+  return end;
+}
+const OV_STALE_MS = 14 * 86400e3;
+function ovStaleNote(series, commonEnd) {
+  const last = ovTsMillis(series.ts[series.ts.length - 1]);
+  if (!isFinite(commonEnd) || commonEnd - last <= OV_STALE_MS) return '';
+  return 'to ' + new Date(last).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+}
+function ovWindowPoints(series, years, commonEnd) {
   const ts = series.ts.map(ovTsMillis);
-  const end = ts[ts.length - 1];
+  const end = isFinite(commonEnd) ? commonEnd : ts[ts.length - 1];
   const start = end - years * 365.25 * 86400e3;
   const pts = [];
   for (let i = 0; i < ts.length; i++) {
@@ -3184,14 +3262,15 @@ function ovRenderRace(strategies, curves) {
   if (!svg) return;
   const all = ovSeriesList(strategies, curves);
   const W = 370, H = 190, padL = 34, padR = 44, padT = 10, padB = 20;
+  const commonEnd = ovCommonEnd(all);
 
-  // Rebase each series to 100 at its first point inside the window.
+  // Rebase each series to 100 at its first point inside the (shared) window.
   const drawn = [];
   all.forEach(sr => {
-    const pts = ovWindowPoints(sr, ovWindowYears);
+    const pts = ovWindowPoints(sr, ovWindowYears, commonEnd);
     if (pts.length < 3) return;
     const base = pts[0][1];
-    drawn.push({ ...sr, pts: pts.map(p => [p[0], 100 * p[1] / base]) });
+    drawn.push({ ...sr, pts: pts.map(p => [p[0], 100 * p[1] / base]), stale: ovStaleNote(sr, commonEnd) });
   });
   if (!drawn.length) return;
 
@@ -3222,8 +3301,9 @@ function ovRenderRace(strategies, curves) {
     const dash = sr.dashed ? ' stroke-dasharray="4 3"' : '';
     inner += `<path d="${d}" fill="none" stroke="${sr.color}" stroke-width="${sr.bench ? 1.4 : 2}"${dash}/>`;
   });
-  // Right-edge end labels, collision-nudged
-  const ends = shown.map(sr => ({ sr, yy: y(sr.pts[sr.pts.length - 1][1]) }))
+  // End labels: right-edge ones collision-nudged; a series that stops early
+  // gets its label at its own last point so the gap is visible.
+  const ends = shown.filter(sr => !sr.stale).map(sr => ({ sr, yy: y(sr.pts[sr.pts.length - 1][1]) }))
     .sort((a, b) => a.yy - b.yy);
   for (let i = 1; i < ends.length; i++) {
     if (ends[i].yy - ends[i - 1].yy < 9) ends[i].yy = ends[i - 1].yy + 9;
@@ -3231,6 +3311,13 @@ function ovRenderRace(strategies, curves) {
   ends.forEach(e => {
     const endV = e.sr.pts[e.sr.pts.length - 1][1] - 100;
     inner += `<text x="${W - padR + 3}" y="${(e.yy + 3).toFixed(1)}" fill="${e.sr.color}" font-size="8.5" font-weight="600">${(endV > 0 ? '+' : '') + endV.toFixed(0)}%</text>`;
+  });
+  shown.filter(sr => sr.stale).forEach(sr => {
+    const last = sr.pts[sr.pts.length - 1];
+    const endV = last[1] - 100;
+    const lx = x(last[0]), ly = y(last[1]);
+    inner += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="2.2" fill="${sr.color}"/>` +
+      `<text x="${lx.toFixed(1)}" y="${(ly + 11).toFixed(1)}" fill="${sr.color}" font-size="8.5" font-weight="600" text-anchor="end">${(endV > 0 ? '+' : '') + endV.toFixed(0)}% · ${esc(sr.stale)}</text>`;
   });
   svg.innerHTML = inner;
 
@@ -3243,7 +3330,8 @@ function ovRenderRace(strategies, curves) {
     item.innerHTML =
       `<span class="legend-swatch" style="background:${sr.color};${sr.dashed ? 'opacity:0.75;' : ''}"></span>` +
       `<span class="legend-label">${esc(sr.label)}</span>` +
-      `<span class="tnum ${ovCls(endV)}">${(endV > 0 ? '+' : '') + endV.toFixed(1)}%</span>`;
+      `<span class="tnum ${ovCls(endV)}">${(endV > 0 ? '+' : '') + endV.toFixed(1)}%</span>` +
+      (sr.stale ? `<span class="ov-stale">${esc(sr.stale)}</span>` : '');
     item.addEventListener('click', () => {
       if (ovHidden.has(sr.id)) ovHidden.delete(sr.id); else ovHidden.add(sr.id);
       ovRenderRace(strategies, curves);
@@ -3283,15 +3371,33 @@ function ovRenderMap(strategies) {
   inner += `<text x="${(padL + (W - padR)) / 2}" y="${H - 4}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="middle">deepest decline</text>` +
     `<text x="10" y="${(padT + H - padB) / 2}" fill="rgba(238,242,246,0.4)" font-size="8" text-anchor="middle" transform="rotate(-90 10 ${(padT + H - padB) / 2})">return per year</text>`;
   dots.forEach(d => {
-    const cx = x(d.dd).toFixed(1), cy = y(d.cagr).toFixed(1);
+    d.cx = parseFloat(x(d.dd).toFixed(1)); d.cy = parseFloat(y(d.cagr).toFixed(1));
+    d.anchor = (d.cx > W - 90) ? 'end' : 'start';
+    d.ty = d.cy;
+  });
+  // Label collision pass (2026-09-17: S3 and S5 share a point, their labels
+  // printed on top of each other). Same-side labels closer than 10px
+  // vertically and 44px horizontally are pushed down; a moved label keeps a
+  // thin leader back to its dot.
+  const placed = [];
+  const xr = d => { const w = 5.2 * d.label.length + 2; return d.anchor === 'end' ? [d.cx - 8 - w, d.cx - 8] : [d.cx + 8, d.cx + 8 + w]; };
+  const xOverlap = (a, b) => { const ra = xr(a), rb = xr(b); return ra[0] < rb[1] + 3 && rb[0] < ra[1] + 3; };
+  dots.slice().sort((a, b) => a.cy - b.cy).forEach(d => {
+    let guard = 0;
+    while (guard++ < 12 && placed.some(p => xOverlap(p, d) && Math.abs(p.ty - d.ty) < 10)) d.ty += 10;
+    placed.push(d);
+  });
+  dots.forEach(d => {
     if (d.hollow) {
-      inner += `<circle cx="${cx}" cy="${cy}" r="5" fill="none" stroke="${d.color}" stroke-width="2.5"/>`;
+      inner += `<circle cx="${d.cx}" cy="${d.cy}" r="5" fill="none" stroke="${d.color}" stroke-width="2.5"/>`;
     } else {
-      inner += `<circle cx="${cx}" cy="${cy}" r="${d.bench ? 4 : 5.5}" fill="${d.color}" stroke="#12151c" stroke-width="1.5"/>`;
+      inner += `<circle cx="${d.cx}" cy="${d.cy}" r="${d.bench ? 4 : 5.5}" fill="${d.color}" stroke="#12151c" stroke-width="1.5"/>`;
     }
-    const anchor = (parseFloat(cx) > W - 90) ? 'end' : 'start';
-    const tx = anchor === 'end' ? parseFloat(cx) - 8 : parseFloat(cx) + 8;
-    inner += `<text x="${tx}" y="${(parseFloat(cy) + 3).toFixed(1)}" fill="${d.bench ? 'rgba(238,242,246,0.55)' : '#EEF2F6'}" font-size="8.5" font-weight="600" text-anchor="${anchor}">${esc(d.label)}</text>`;
+    const tx = d.anchor === 'end' ? d.cx - 8 : d.cx + 8;
+    if (Math.abs(d.ty - d.cy) > 4) {
+      inner += `<line x1="${d.cx}" y1="${(d.cy + 5).toFixed(1)}" x2="${d.cx}" y2="${(d.ty - 2).toFixed(1)}" stroke="${d.color}" stroke-width="0.8" stroke-opacity="0.6"/>`;
+    }
+    inner += `<text x="${tx}" y="${(d.ty + 3).toFixed(1)}" fill="${d.bench ? 'rgba(238,242,246,0.55)' : '#EEF2F6'}" font-size="8.5" font-weight="600" text-anchor="${d.anchor}">${esc(d.label)}</text>`;
   });
   svg.innerHTML = inner;
 }
@@ -3301,13 +3407,14 @@ function ovRenderBars(strategies, curves) {
   const legend = $('ov-bars-legend');
   if (!svg) return;
   const series = ovSeriesList(strategies, curves);
+  const commonEnd = ovCommonEnd(series);
   const windows = [{ label: '3 months', yrs: 0.25 }, { label: '1 year', yrs: 1 }];
   const groups = windows.map(w => ({
     label: w.label,
     bars: series.map(sr => {
-      const pts = ovWindowPoints(sr, w.yrs);
+      const pts = ovWindowPoints(sr, w.yrs, commonEnd);
       if (pts.length < 2) return null;
-      return { label: sr.label, color: sr.color, bench: !!sr.bench,
+      return { label: sr.label, color: sr.color, bench: !!sr.bench, stale: ovStaleNote(sr, commonEnd),
                ret: (pts[pts.length - 1][1] / pts[0][1] - 1) * 100 };
     }).filter(Boolean),
   }));
@@ -3344,7 +3451,8 @@ function ovRenderBars(strategies, curves) {
     const item = document.createElement('span');
     item.className = 'legend-item';
     item.innerHTML = `<span class="legend-swatch" style="background:${b.color};${b.bench ? 'opacity:0.5;' : ''}"></span>` +
-      `<span class="legend-label">${esc(b.label)}</span>`;
+      `<span class="legend-label">${esc(b.label)}</span>` +
+      (b.stale ? `<span class="ov-stale">${esc(b.stale)}</span>` : '');
     legend.appendChild(item);
   });
 }
