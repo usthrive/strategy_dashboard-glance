@@ -853,14 +853,13 @@
       font-weight: 500;
       letter-spacing: -0.3px;
     }
-    /* Strategy tiles: a two-column grid (2026-09-17, user ruling — was a
-       one-per-row stack). An odd last tile spans the row so the grid stays full;
-       below 360px the grid collapses to one column. */
+    /* Strategy tiles: a two-column grid in strategy-number order (2026-09-17,
+       user ruling — was a one-per-row stack in pipeline order). With an odd
+       count the last tile sits alone on the left and the slot stays empty (ruled
+       the same day: never stretch it). Below 360px: one column. */
     #ov-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    #ov-cards > .ov-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
     @media (max-width: 359px) {
       #ov-cards { grid-template-columns: minmax(0, 1fr); }
-      #ov-cards > .ov-card:last-child:nth-child(odd) { grid-column: auto; }
     }
     .ov-card {
       position: relative;
@@ -996,7 +995,7 @@
           </div>
         </div>
         <div class="chart-wrap">
-          <svg id="ov-race" viewBox="0 0 370 190" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <svg id="ov-race" viewBox="0 0 370 240" preserveAspectRatio="none" aria-hidden="true"></svg>
         </div>
         <div class="chart-legend" id="ov-race-legend"></div>
         <p class="stats-note" style="margin-top: 6px;">Certified strategy curves, weekly resolution. Tap a name to show or hide it.</p>
@@ -1008,7 +1007,7 @@
           <div class="display-sm">Up and left is better</div>
         </div>
         <div class="chart-wrap">
-          <svg id="ov-map" viewBox="0 0 370 210" aria-hidden="true"></svg>
+          <svg id="ov-map" viewBox="0 0 370 260" aria-hidden="true"></svg>
         </div>
         <p class="stats-note" style="margin-top: 6px;">Yearly return vs deepest decline over the same five years, strategies beside their indexes.</p>
       </div>
@@ -1019,7 +1018,7 @@
           <div class="display-sm">Recent performance by period</div>
         </div>
         <div class="chart-wrap">
-          <svg id="ov-bars" viewBox="0 0 370 200" aria-hidden="true"></svg>
+          <svg id="ov-bars" viewBox="0 0 370 250" aria-hidden="true"></svg>
         </div>
         <div class="chart-legend" id="ov-bars-legend"></div>
       </div>
@@ -3037,9 +3036,16 @@ function showOverviewMode(s) {
   renderOverview(s);
 }
 
+// Overview order = strategy number (S1, S2, S3, S4, S5), not the pipeline's
+// group order (which appends new groups last — S2 v2.2 landed after S5).
+// Unnumbered keys (candidates) follow, in pipeline order.
+function ovOrderedKeys(strategies) {
+  return Object.keys(strategies).sort((a, b) => (OV_NUM[a] || 99) - (OV_NUM[b] || 99));
+}
+
 function renderOverview(s) {
   const strategies = s.strategies || {};
-  const keys = Object.keys(strategies);
+  const keys = ovOrderedKeys(strategies);
   $('ov-asof').textContent = s.as_of_date || '';
 
   // ── Portfolio strip ──
@@ -3205,7 +3211,7 @@ function ovFetchCurves(strategies) {
 // benchmark indexes (from designated curves' bm columns).
 function ovSeriesList(strategies, curves) {
   const out = [];
-  Object.keys(strategies).forEach(k => {
+  ovOrderedKeys(strategies).forEach(k => {
     const c = curves[k];
     if (!c || !OV_COLORS[k] || !Array.isArray(c.ts) || !Array.isArray(c.eq)) return;
     out.push({
@@ -3261,7 +3267,7 @@ function ovRenderRace(strategies, curves) {
   const legend = $('ov-race-legend');
   if (!svg) return;
   const all = ovSeriesList(strategies, curves);
-  const W = 370, H = 190, padL = 34, padR = 44, padT = 10, padB = 20;
+  const W = 370, H = 240, padL = 34, padR = 44, padT = 10, padB = 20;
   const commonEnd = ovCommonEnd(all);
 
   // Rebase each series to 100 at its first point inside the (shared) window.
@@ -3344,7 +3350,7 @@ function ovRenderMap(strategies) {
   const svg = $('ov-map');
   if (!svg) return;
   const dots = [];
-  Object.keys(strategies).forEach(k => {
+  ovOrderedKeys(strategies).forEach(k => {
     if (!OV_COLORS[k]) return;
     const st = strategies[k];
     const s5 = (st.stats_5y || {}).strategy;
@@ -3357,7 +3363,7 @@ function ovRenderMap(strategies) {
     if (s5) dots.push({ label: b.label, color: 'rgba(238,242,246,0.45)', cagr: s5.cagr, dd: s5.maxdd, bench: true });
   });
   if (!dots.length) { svg.innerHTML = ''; return; }
-  const W = 370, H = 210, padL = 38, padR = 16, padT = 12, padB = 30;
+  const W = 370, H = 260, padL = 38, padR = 16, padT = 12, padB = 30;
   const xMax = Math.max(...dots.map(d => d.dd)) * 1.25;
   const yMax = Math.max(...dots.map(d => d.cagr)) * 1.18;
   const x = v => padL + (v / xMax) * (W - padL - padR);
@@ -3420,7 +3426,7 @@ function ovRenderBars(strategies, curves) {
   }));
   const vals = groups.flatMap(g => g.bars.map(b => b.ret));
   if (!vals.length) { svg.innerHTML = ''; return; }
-  const W = 370, H = 200, padL = 34, padR = 10, padT = 14, padB = 26;
+  const W = 370, H = 250, padL = 34, padR = 10, padT = 14, padB = 26;
   const vMax = Math.max(0, ...vals) * 1.15 || 1;
   const vMin = Math.min(0, ...vals) * 1.15;
   const y = v => padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB);
