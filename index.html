@@ -1134,6 +1134,11 @@
               <button type="button" class="active" data-years="1">1Y</button>
               <button type="button" data-years="3">3Y</button>
               <button type="button" data-years="5">5Y</button>
+              <!-- S5WEB 2026-09-20: shown only for a curve whose payload is
+                   longer than 5 years (backtest.lookback_years in
+                   strategy_groups.json). Without it a 41-year payload is
+                   invisible past the 5Y slice. -->
+              <button type="button" data-years="999" id="max-yr-btn" style="display: none;">Max</button>
             </div>
             <div class="seg" id="scale-toggle" title="Linear or logarithmic Y-axis">
               <button type="button" class="active" data-scale="linear">Lin</button>
@@ -2255,6 +2260,11 @@ let eqData = null;
 let chartView = 'backtest';
 let chartYears = 1;
 let chartScale = 'linear';   // 'linear' | 'log' — Y-axis scale for the perf chart
+// S5WEB 2026-09-20: the payload may carry a `scale_hint` ('log' | 'linear').
+// It is applied ONCE per equity object, and never again after the viewer has
+// touched the Lin/Log toggle themselves.
+let scaleUserSet = false;
+let scaleHintAppliedFor = null;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CHART_PAD = { l: 30, r: 22, t: 14, b: 26 };
@@ -2876,6 +2886,7 @@ $('scale-toggle').addEventListener('click', e => {
   $('scale-toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   chartScale = btn.dataset.scale;
+  scaleUserSet = true;          // S5WEB: the viewer wins over scale_hint
   renderChart();
 });
 
@@ -2904,6 +2915,32 @@ async function loadEquityCurve() {
     // needs an attached account in strategy_groups.json + 2 days of data.
     const liveBtn = $('live-btn');
     const viewToggle = $('view-toggle');
+    // S5WEB: expose "Max" only when the payload really is longer than the
+    // 5Y slice, and adopt the payload's scale_hint on first load.
+    const maxBtn = $('max-yr-btn');
+    if (maxBtn) {
+      const spanYears = (eqData.ts[eqData.ts.length - 1] - eqData.ts[0]) / (365.25 * 86400);
+      maxBtn.style.display = spanYears > 5.5 ? '' : 'none';
+      maxBtn.textContent = spanYears > 5.5 ? Math.round(spanYears) + 'Y' : 'Max';
+      if (spanYears <= 5.5 && chartYears > 5) {
+        chartYears = 5;
+        $('yr-toggle').querySelectorAll('button').forEach(b => {
+          b.classList.toggle('active', b.dataset.years === '5');
+        });
+      }
+    }
+    // Adopt scale_hint ONLY for a long (> 5.5y) payload: every group's
+    // payload reports scale_hint 'log' because dynamic_range mixes the
+    // backtest equity with the live NLV, so adopting it unconditionally
+    // would flip the 1Y default of every other strategy page to log.
+    const _longSpan = ((eqData.ts[eqData.ts.length - 1] - eqData.ts[0]) / (365.25 * 86400)) > 5.5;
+    if (_longSpan && !scaleUserSet && eqData.scale_hint && scaleHintAppliedFor !== objectName) {
+      scaleHintAppliedFor = objectName;
+      chartScale = eqData.scale_hint === 'log' ? 'log' : 'linear';
+      $('scale-toggle').querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b.dataset.scale === chartScale);
+      });
+    }
     if (eqData.actual_ts && eqData.actual_ts.length >= 2) {
       liveBtn.style.display = '';
       viewToggle.style.display = '';
