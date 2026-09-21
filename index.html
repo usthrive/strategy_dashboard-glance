@@ -1873,10 +1873,14 @@ async function load() {
       ovOpt.textContent = 'All Strategies — Overview';
       select.appendChild(ovOpt);
     }
-    Object.keys(strategies).forEach(k => {
+    // Strategy order + uniform "Strategy N — descriptor" names (2026-09-20,
+    // user ruling): the pipeline lists groups in creation order and labels
+    // them inconsistently ("Strategy 1 …" vs "S4 …"); the dropdown mirrors
+    // the overview tiles instead.
+    ovOrderedKeys(strategies).forEach(k => {
       const opt = document.createElement('option');
       opt.value = k;
-      opt.textContent = strategies[k].label || k;
+      opt.textContent = ovSelectName(k, strategies[k]);
       select.appendChild(opt);
     });
     if (Object.keys(strategies).length > 1) {
@@ -3004,6 +3008,27 @@ const OV_NUM = {
 const OV_CANDIDATE = {
   SP500_12_Stage_Strategy_v21: { of: 'SP500_12_Stage_Strategy', tag: 'v2.1 candidate · paper trial' },
 };
+// Dropdown name: "Strategy N — <descriptor>" for numbered strategies, built
+// from the pipeline label with its own "Strategy N"/"SN" prefix removed and the
+// asset moved to the front: "NDX — Strategy 3 v4.2 (x)" -> "Strategy 3 — NDX v4.2 (x)",
+// "QQQ L/S (S4 v5.2)" -> "Strategy 4 — QQQ L/S v5.2", "S5 v2 (P10 …)" -> "Strategy 5 — S3/S1 rotation v2 (P10 …)".
+// Unnumbered keys (candidates) keep the pipeline label.
+function ovSelectName(key, strat) {
+  const n = OV_NUM[key];
+  const raw = String((strat && strat.label) || key).trim();
+  if (!n || OV_CANDIDATE[key]) return raw;
+  let d = raw;
+  // "<asset> — Strategy N <rest>"  ->  "<asset> <rest>"
+  d = d.replace(new RegExp(`\\s*[—–-]\\s*Strategy\\s*${n}\\b\\s*`), ' ');
+  // "<asset> (SN <ver>)"  ->  "<asset> <ver>"
+  d = d.replace(new RegExp(`\\s*\\(S${n}\\s+([^)]*)\\)`), ' $1');
+  // leading "SN — " / "SN " (S5's own label)
+  d = d.replace(new RegExp(`^S${n}\\s*[—–-]?\\s*`), '');
+  if (key === 'S5_P10_Combo_Strategy' && !/rotation/i.test(d)) d = 'S3/S1 rotation ' + d;
+  d = d.replace(/\s{2,}/g, ' ').trim();
+  return `Strategy ${n} — ${d}`;
+}
+
 function ovCardName(key, strat) {
   const cand = OV_CANDIDATE[key];
   if (cand) {
