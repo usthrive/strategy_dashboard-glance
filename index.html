@@ -656,6 +656,16 @@
       border-top: 1.5px dotted rgba(238,242,246,0.40);
       height: 0;
     }
+    /* Second legend line: performance since the CURRENT version went live.
+       The chart above plots the account's WHOLE history, which can include
+       an older version of the strategy. */
+    .chart-since-live {
+      margin-top: 4px;
+      font-size: 10px;
+      color: var(--faint);
+      line-height: 1.5;
+    }
+    .chart-since-live .tnum { font-variant-numeric: tabular-nums; }
 
     /* ─── Lifetime stats ─────────────────────────────────────────── */
     /* Strategy-vs-B&H comparison table */
@@ -1162,6 +1172,7 @@
             <span class="tnum" id="legend-bench-val"></span>
           </span>
         </div>
+        <div class="chart-since-live" id="chart-since-live" style="display:none;"></div>
       </div>
 
       <!-- Lifetime stats (Strategy vs Buy & Hold) -->
@@ -2497,6 +2508,35 @@ function renderChart() {
     svg.appendChild(txt);
   });
 
+  // Version go-live marker — a thin dashed rule at the bar where the
+  // CURRENT strategy version started running live, so the eye can tell
+  // the older version's stretch of the line from the current one. Live
+  // view only; skipped when the marker would sit on the first bar (the
+  // whole line is already the current version).
+  if (chartView === 'live' && eqData.actual_since_live
+      && eqData.actual_since_live.start_index > 0
+      && eqData.actual_since_live.start_index < ts.length) {
+    const mx = X(ts[eqData.actual_since_live.start_index]);
+    svg.appendChild(makeEl('line', {
+      x1: mx, x2: mx, y1: CHART_PAD.t, y2: CHART_H - CHART_PAD.b,
+      stroke: 'rgba(238,242,246,0.25)', 'stroke-width': 0.6,
+      'stroke-dasharray': '2 3', 'pointer-events': 'none',
+    }));
+    // Flip the label to the left of the rule when the marker sits in the
+    // right-hand fifth of the plot, so it never runs off the edge.
+    const mFlip = mx > (CHART_W - CHART_PAD.r) - innerW * 0.2;
+    const mlbl = makeEl('text', {
+      x: mFlip ? mx - 3 : mx + 3, y: CHART_PAD.t + 8,
+      'text-anchor': mFlip ? 'end' : 'start',
+      'font-family': 'JetBrains Mono, ui-monospace, monospace',
+      'font-size': '8',
+      fill: 'rgba(238,242,246,0.35)',
+      'pointer-events': 'none',
+    });
+    mlbl.textContent = eqData.actual_since_live.version || 'go-live';
+    svg.appendChild(mlbl);
+  }
+
   // Points
   const line1Pts = ts.map((t, i) => [X(t), Y(line1Pct[i])]);
   const bmPts = ts.map((t, i) => [X(t), Y(bmPct[i])]);
@@ -2647,6 +2687,34 @@ function renderChart() {
     item.appendChild(val);
     legendContainer.appendChild(item);
   });
+
+  // ─── "Since the current version went live" line ──────────────────
+  // The live chart plots the account's WHOLE NLV history since its first
+  // fill, which for most strategies includes months when an OLDER version
+  // ran. This second legend line gives the honest side-by-side over the
+  // window the CURRENT version has been running. Live view only; hidden
+  // when the payload carries no block.
+  const sinceEl = $('chart-since-live');
+  if (sinceEl) {
+    const sl = (chartView === 'live') ? (eqData.actual_since_live || null) : null;
+    if (sl && Number.isFinite(sl.strategy_return_pct)) {
+      const pct = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+      const cls = v => (v >= 0 ? 'var(--pos)' : 'var(--neg)');
+      const span = (v) =>
+        `<span class="tnum" style="color:${cls(v)}">${pct(v)}</span>`;
+      const benchLbl = esc($('legend-bench-label').textContent || 'Benchmark');
+      let txt = `Since ${sl.version ? esc(sl.version) + ' ' : ''}go-live ` +
+        `${esc(sl.from_date || '')} · Actual ${span(sl.strategy_return_pct)}`;
+      if (Number.isFinite(sl.bench_return_pct)) {
+        txt += ` · ${benchLbl} ${span(sl.bench_return_pct)}`;
+      }
+      sinceEl.innerHTML = txt;
+      sinceEl.style.display = '';
+    } else {
+      sinceEl.innerHTML = '';
+      sinceEl.style.display = 'none';
+    }
+  }
 
   // ─── Crosshair hover ─────────────────────────────────────────────
   // Vertical guide line + per-series dots + date/value tooltip that
@@ -3181,6 +3249,17 @@ function renderOverview(s) {
         }
       } else if (status === 'PAPER') {
         lines.push(cand ? 'Successor candidate proving itself on the paper account — live money stays on the current engine until the flip' : 'Paper account — no real capital yet');
+      }
+      // The "Since <inception>" line above runs from the ACCOUNT's first
+      // fill, which can pre-date the CURRENT strategy version. This one is
+      // the honest window: since that version went live.
+      const lsv = st.live_since_version;
+      if (lsv && isFinite(lsv.strategy_return_pct)) {
+        const lsvBench = (st.benchmark || {}).label || (inc && inc.bench_label) || 'index';
+        lines.push(`Since ${esc(lsv.version || '')} live ${esc(lsv.from_date || '')} ` +
+          `<span class="tnum ${ovCls(lsv.strategy_return_pct)}">${fmtPct(lsv.strategy_return_pct, 2)}</span>` +
+          (isFinite(lsv.bench_return_pct)
+            ? ` <span class="ov-idx">vs ${esc(lsvBench)} ${fmtPct(lsv.bench_return_pct, 2)}</span>` : ''));
       }
       if (s5) {
         lines.push(`5y <span class="tnum">${fmtPct(s5.cagr, 1, false)}/yr · ${fmtNum(s5.sharpe, 2)} Sharpe · ${fmtPct(s5.maxdd, 1, false)} max decline</span>`);
